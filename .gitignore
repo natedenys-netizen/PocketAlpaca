@@ -1,0 +1,19 @@
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Secrets — never commit a token or the Connect client secret
+*.token
+.env
+.env.*
+Scripts/.oauth_state
+
+# macOS
+.DS_Store

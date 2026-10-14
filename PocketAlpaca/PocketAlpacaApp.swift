@@ -2,16 +2,20 @@
 //  PocketAlpacaApp.swift
 //  PocketAlpaca
 //
-//  Created by Nathanael Denys on 10/14/26.
+//  A private, read-only iPhone view of an Alpaca account.
+//  Built on the Alpaca Connect program (OAuth, read scope only).
 //
 
 import SwiftUI
 
 @main
 struct PocketAlpacaApp: App {
+    @State private var model = AppModel()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootTabView()
+                .environment(model)
         }
     }
 }
