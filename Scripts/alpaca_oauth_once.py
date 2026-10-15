@@ -60,6 +60,19 @@ def keychain_set(account, value):
         sys.exit(f"Keychain write failed for {account}: {r.stderr.strip()}")
 
 
+def kill_stale_instances():
+    """An earlier run of this script left waiting for the browser holds the port. End it."""
+    r = subprocess.run(["lsof", "-ti", f"tcp:{PORT}", "-sTCP:LISTEN"], capture_output=True, text=True)
+    for pid in r.stdout.split():
+        if pid == str(os.getpid()):
+            continue
+        cmd = subprocess.run(["ps", "-o", "command=", "-p", pid], capture_output=True, text=True).stdout
+        if "alpaca_oauth_once" in cmd:
+            print(f"Ending an earlier run of this script (pid {pid}) that was still waiting for the browser.")
+            subprocess.run(["kill", pid])
+    time.sleep(1)
+
+
 def show_client_id():
     """Print the stored Client ID (it is not a secret; it travels in the browser URL)
     and the exact authorize URL, so it can be compared with the Connect dashboard."""
@@ -149,9 +162,13 @@ def main():
     http.server.HTTPServer.allow_reuse_address = True
     try:
         server = http.server.HTTPServer(("127.0.0.1", PORT), Handler)
-    except OSError as e:
-        sys.exit(f"Port {PORT} is busy ({e.strerror}). An earlier run of this script is probably still waiting "
-                 f"in another Terminal tab: press Ctrl-C there, or run  lsof -ti tcp:{PORT} | xargs kill  and try again.")
+    except OSError:
+        kill_stale_instances()
+        try:
+            server = http.server.HTTPServer(("127.0.0.1", PORT), Handler)
+        except OSError as e:
+            sys.exit(f"Port {PORT} is still busy ({e.strerror}). Something other than this script is using it: "
+                     f"run  lsof -i tcp:{PORT}  to see what.")
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
 
@@ -159,8 +176,8 @@ def main():
     print("If it does not open, paste this URL into Safari:\n\n  " + auth_url + "\n")
     webbrowser.open(auth_url)
 
-    print("Waiting for Alpaca to redirect back to localhost:8765 (up to 10 minutes; Ctrl-C to abort) ...")
-    deadline = time.time() + 600
+    print("Waiting for Alpaca to redirect back to localhost:8765 (up to 5 minutes; Ctrl-C to abort) ...")
+    deadline = time.time() + 300
     try:
         while "code" not in received:
             if time.time() > deadline:
