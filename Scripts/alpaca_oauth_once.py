@@ -7,11 +7,16 @@ authorization code on http://localhost:8765/callback, exchanges it for a
 read-only access token using your Connect app's client secret, and prints
 the token ONCE so you can paste it into PocketAlpaca → Settings on the phone.
 
-Nothing is written to disk. The client secret is read from the environment
-or typed at a hidden prompt; it never leaves this machine.
+The Client ID and Client Secret come from, in order: the environment
+(ALPACA_CLIENT_ID / ALPACA_CLIENT_SECRET), the macOS login Keychain, or a
+prompt. Store them in the Keychain ONCE with --store so you never type them
+again:
 
+    python3 Scripts/alpaca_oauth_once.py --store          # paste ID, paste Secret
     python3 Scripts/alpaca_oauth_once.py --env paper      # first, for development
     python3 Scripts/alpaca_oauth_once.py --env live       # later, for the real account
+
+The token itself is never written anywhere; it is printed once.
 
 Register the app first at https://app.alpaca.markets/connect with redirect
 URI exactly:  http://localhost:8765/callback
@@ -22,6 +27,7 @@ import http.server
 import json
 import os
 import secrets
+import subprocess
 import sys
 import threading
 import urllib.parse
@@ -34,6 +40,35 @@ REDIRECT_URI = "http://localhost:8765/callback"
 PORT = 8765
 
 received = {}
+
+KEYCHAIN_SERVICE = "PocketAlpaca-Connect"
+
+
+def keychain_get(account):
+    """Read one value from the macOS login Keychain, or None if absent."""
+    r = subprocess.run(["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", account, "-w"],
+                       capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
+
+
+def keychain_set(account, value):
+    """Create or replace one value in the macOS login Keychain."""
+    r = subprocess.run(["security", "add-generic-password", "-U", "-s", KEYCHAIN_SERVICE, "-a", account, "-w", value],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        sys.exit(f"Keychain write failed for {account}: {r.stderr.strip()}")
+
+
+def store_credentials():
+    print("Paste each value from your password manager and press Enter. Nothing is echoed.")
+    cid = getpass.getpass("Connect app Client ID: ").strip()
+    sec = getpass.getpass("Connect app Client Secret: ").strip()
+    if not cid or not sec:
+        sys.exit("Both values are required; nothing stored.")
+    keychain_set("client_id", cid)
+    keychain_set("client_secret", sec)
+    print(f"Stored in the login Keychain as service '{KEYCHAIN_SERVICE}' (Client ID is {len(cid)} characters, Secret {len(sec)}).")
+    print("You can see or delete them in Keychain Access by searching PocketAlpaca.")
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -57,14 +92,27 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--env", choices=["paper", "live"], required=True, help="which account to authorize")
+    ap.add_argument("--env", choices=["paper", "live"], help="which account to authorize")
     ap.add_argument("--scope", default="", help="OAuth scopes; empty = read-only (default). 'data' adds Market Data API.")
+    ap.add_argument("--store", action="store_true", help="save the Client ID and Secret in the macOS Keychain, then exit")
     args = ap.parse_args()
 
-    client_id = os.environ.get("ALPACA_CLIENT_ID") or input("Connect app Client ID: ").strip()
-    client_secret = os.environ.get("ALPACA_CLIENT_SECRET") or getpass.getpass("Connect app Client Secret (hidden): ").strip()
+    if args.store:
+        store_credentials()
+        return
+    if not args.env:
+        ap.error("--env paper|live is required (or use --store first)")
+
+    client_id = os.environ.get("ALPACA_CLIENT_ID") or keychain_get("client_id")
+    client_secret = os.environ.get("ALPACA_CLIENT_SECRET") or keychain_get("client_secret")
+    src = "environment" if os.environ.get("ALPACA_CLIENT_ID") else ("Keychain" if client_id else "prompt")
+    if not client_id:
+        client_id = input("Connect app Client ID: ").strip()
+    if not client_secret:
+        client_secret = getpass.getpass("Connect app Client Secret (hidden): ").strip()
     if not client_id or not client_secret:
-        sys.exit("Client ID and Client Secret are required.")
+        sys.exit("Client ID and Client Secret are required. Run with --store to save them once.")
+    print(f"Using Client ID from {src}: {client_id[:4]}…{client_id[-4:]} ({len(client_id)} characters)")
 
     state = secrets.token_urlsafe(24)
     params = {
