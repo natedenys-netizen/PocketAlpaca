@@ -60,6 +60,32 @@ def keychain_set(account, value):
         sys.exit(f"Keychain write failed for {account}: {r.stderr.strip()}")
 
 
+def check_client_id():
+    """Fetch the authorize page for the stored Client ID and for a fake one, and say
+    whether Alpaca treats ours any differently. Sends only the Client ID, never the secret."""
+    cid = os.environ.get("ALPACA_CLIENT_ID") or keychain_get("client_id")
+    if not cid:
+        sys.exit("No Client ID stored. Run --store first.")
+    print(f"Stored Client ID: {cid[:4]}…{cid[-4:]} ({len(cid)} characters)")
+
+    def probe(client_id):
+        q = urllib.parse.urlencode({"response_type": "code", "client_id": client_id,
+                                    "redirect_uri": REDIRECT_URI, "state": "check", "env": "paper"})
+        req = urllib.request.Request(AUTHORIZE_URL + "?" + q, headers={"User-Agent": "PocketAlpaca-check"})
+        try:
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return r.status, r.geturl(), r.read().decode(errors="replace")
+        except urllib.error.HTTPError as e:
+            return e.code, e.geturl(), e.read().decode(errors="replace")
+
+    for label, client_id in (("yours", cid), ("fake ", "0" * len(cid))):
+        code, final, body = probe(client_id)
+        unknown = "Client authentication failed" in body or "unknown client" in body.lower()
+        print(f"  {label}: HTTP {code} -> {final[:70]}  {'UNKNOWN CLIENT' if unknown else 'recognized (no unknown-client error)'}")
+    print("If yours says UNKNOWN CLIENT just like the fake one, Alpaca's OAuth server has no client with that ID:")
+    print("either the ID is not the OAuth Client ID, or the app is not provisioned yet.")
+
+
 def store_credentials():
     print("Paste each value from your password manager and press Enter. Nothing is echoed.")
     cid = getpass.getpass("Connect app Client ID: ").strip()
@@ -96,10 +122,14 @@ def main():
     ap.add_argument("--env", choices=["paper", "live"], help="which account to authorize")
     ap.add_argument("--scope", default="", help="OAuth scopes; empty = read-only (default). 'data' adds Market Data API.")
     ap.add_argument("--store", action="store_true", help="save the Client ID and Secret in the macOS Keychain, then exit")
+    ap.add_argument("--check", action="store_true", help="ask Alpaca whether it recognizes the stored Client ID (no browser, no secret), then exit")
     args = ap.parse_args()
 
     if args.store:
         store_credentials()
+        return
+    if args.check:
+        check_client_id()
         return
     if not args.env:
         ap.error("--env paper|live is required (or use --store first)")
