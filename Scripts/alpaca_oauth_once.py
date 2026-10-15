@@ -30,6 +30,7 @@ import secrets
 import subprocess
 import sys
 import threading
+import time
 import urllib.parse
 import urllib.request
 import webbrowser
@@ -126,7 +127,12 @@ def main():
         params["scope"] = args.scope
     auth_url = AUTHORIZE_URL + "?" + urllib.parse.urlencode(params)
 
-    server = http.server.HTTPServer(("127.0.0.1", PORT), Handler)
+    http.server.HTTPServer.allow_reuse_address = True
+    try:
+        server = http.server.HTTPServer(("127.0.0.1", PORT), Handler)
+    except OSError as e:
+        sys.exit(f"Port {PORT} is busy ({e.strerror}). An earlier run of this script is probably still waiting "
+                 f"in another Terminal tab: press Ctrl-C there, or run  lsof -ti tcp:{PORT} | xargs kill  and try again.")
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
 
@@ -134,9 +140,17 @@ def main():
     print("If it does not open, paste this URL into Safari:\n\n  " + auth_url + "\n")
     webbrowser.open(auth_url)
 
-    print("Waiting for Alpaca to redirect back to localhost:8765 ...")
-    while "code" not in received:
-        threading.Event().wait(0.2)
+    print("Waiting for Alpaca to redirect back to localhost:8765 (up to 10 minutes; Ctrl-C to abort) ...")
+    deadline = time.time() + 600
+    try:
+        while "code" not in received:
+            if time.time() > deadline:
+                server.shutdown()
+                sys.exit("Timed out waiting for the browser. Run the script again.")
+            time.sleep(0.2)
+    except KeyboardInterrupt:
+        server.shutdown()
+        sys.exit("\nAborted.")
     server.shutdown()
 
     if received.get("error") or not received.get("code"):
