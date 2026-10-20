@@ -23,6 +23,7 @@ protocol AlpacaClient: Sendable {
     func positions() async throws -> [Position]
     func orders(open: Bool, limit: Int) async throws -> [Order]
     func portfolioHistory(_ range: ChartRange, accountCreated: Date?) async throws -> PortfolioHistory
+    func clock() async throws -> MarketClock
 }
 
 /// Read-only client. Every call is GET; nothing here can place or change an order.
@@ -89,6 +90,8 @@ struct LiveAlpacaClient: AlpacaClient {
     func portfolioHistory(_ range: ChartRange, accountCreated: Date?) async throws -> PortfolioHistory {
         try await get("account/portfolio/history", range.query(accountCreated: accountCreated))
     }
+
+    func clock() async throws -> MarketClock { try await get("clock") }
 }
 
 /// Sample data for Xcode previews and for the simulator before a token exists.
@@ -122,11 +125,11 @@ struct MockAlpacaClient: AlpacaClient {
         let now = Date()
         return [
             Order(id: "o1", clientOrderId: nil, createdAt: now.addingTimeInterval(-3600), submittedAt: now.addingTimeInterval(-3600), filledAt: nil, canceledAt: nil,
-                  symbol: "CM", qty: .init(2), filledQty: .init(0), filledAvgPrice: .init(nil), type: "stop", side: "buy", timeInForce: "gtc",
-                  limitPrice: .init(nil), stopPrice: .init(117.30), status: "new", orderClass: "simple"),
+                  symbol: "CM", qty: .init(2), filledQty: .init(0), filledAvgPrice: .init(nil), type: "trailing_stop", side: "buy", timeInForce: "gtc",
+                  limitPrice: .init(nil), stopPrice: .init(117.30), trailPercent: .init(2), trailPrice: .init(nil), hwm: .init(114.99), status: "new", orderClass: "simple"),
             Order(id: "o2", clientOrderId: nil, createdAt: now.addingTimeInterval(-7200), submittedAt: now.addingTimeInterval(-7200), filledAt: now.addingTimeInterval(-7190), canceledAt: nil,
                   symbol: "MSBI", qty: .init(7), filledQty: .init(7), filledAvgPrice: .init(33.15), type: "market", side: "buy", timeInForce: "day",
-                  limitPrice: .init(nil), stopPrice: .init(nil), status: "filled", orderClass: "simple"),
+                  limitPrice: .init(nil), stopPrice: .init(nil), trailPercent: .init(nil), trailPrice: .init(nil), hwm: .init(nil), status: "filled", orderClass: "simple"),
         ].filter { open ? $0.isOpen : !$0.isOpen }
     }
 
@@ -139,5 +142,10 @@ struct MockAlpacaClient: AlpacaClient {
         return PortfolioHistory(timestamp: (0..<n).map { start + $0 * 300 }, equity: eq,
                                 profitLoss: eq.map { ($0 ?? 0) - 3056 }, profitLossPct: eq.map { (($0 ?? 0) - 3056) / 3056 },
                                 baseValue: 3056, timeframe: "5Min")
+    }
+
+    func clock() async throws -> MarketClock {
+        let now = Date()
+        return MarketClock(timestamp: now, isOpen: false, nextOpen: now.addingTimeInterval(14 * 3600), nextClose: now.addingTimeInterval(20.5 * 3600))
     }
 }

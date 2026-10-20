@@ -38,6 +38,12 @@ struct OverviewView: View {
             }
             .font(.subheadline.monospacedDigit())
             .foregroundStyle(Color.pnl(model.account?.dayChange))
+            if let clock = model.clock {
+                Label(clock.summary, systemImage: clock.isOpen ? "circle.fill" : "circle")
+                    .font(.caption)
+                    .foregroundStyle(clock.isOpen ? Color.green : Color.secondary)
+                    .padding(.top, 2)
+            }
         }
     }
 
@@ -98,6 +104,19 @@ struct EquityChart: View {
     let range: ChartRange
 
     private var isUp: Bool { (points.last?.equity ?? 0) >= (points.first?.equity ?? 0) }
+
+    /// Axis labels carry whatever distinguishes the ticks: hours for a day,
+    /// month + day for a month, month for a year, month + year beyond that.
+    private var xFormat: Date.FormatStyle {
+        switch range {
+        case .day:   return .dateTime.hour()
+        case .month: return .dateTime.month(.abbreviated).day()
+        case .year:  return .dateTime.month(.abbreviated)
+        case .all:
+            let span = (points.last?.date.timeIntervalSince(points.first?.date ?? .now)) ?? 0
+            return span > 400 * 86400 ? .dateTime.month(.abbreviated).year() : .dateTime.month(.abbreviated).day()
+        }
+    }
     private var tint: Color { isUp ? .green : .red }
 
     var body: some View {
@@ -127,10 +146,11 @@ struct EquityChart: View {
             }
         }
         .chartXAxis {
-            AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+            AxisMarks(values: .automatic(desiredCount: 4)) { v in
                 AxisGridLine().foregroundStyle(.quaternary)
-                AxisValueLabel(format: range == .day ? .dateTime.hour() : .dateTime.month().day(), centered: false)
-                    .font(.caption2)
+                AxisValueLabel {
+                    if let d = v.as(Date.self) { Text(d, format: xFormat).font(.caption2) }
+                }
             }
         }
     }

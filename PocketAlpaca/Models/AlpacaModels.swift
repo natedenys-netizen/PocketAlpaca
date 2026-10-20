@@ -138,11 +138,16 @@ struct Order: Codable, Hashable, Identifiable {
     let timeInForce: String?
     let limitPrice: StringDouble
     let stopPrice: StringDouble
+    let trailPercent: StringDouble
+    let trailPrice: StringDouble
+    let hwm: StringDouble               // high-water mark a trailing stop trails from
     let status: String
     let orderClass: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, symbol, qty, type, side, status
+        case id, symbol, qty, type, side, status, hwm
+        case trailPercent = "trail_percent"
+        case trailPrice = "trail_price"
         case clientOrderId = "client_order_id"
         case createdAt = "created_at"
         case submittedAt = "submitted_at"
@@ -158,6 +163,24 @@ struct Order: Codable, Hashable, Identifiable {
 
     var isOpen: Bool {
         ["new", "accepted", "pending_new", "partially_filled", "held", "accepted_for_bidding"].contains(status.lowercased())
+    }
+
+    var isStopOrder: Bool { type.lowercased().contains("stop") }
+
+    /// How far the market is from triggering this stop, as a fraction of the
+    /// current price (always positive; 0.012 = 1.2% away). Nil when it does
+    /// not apply or the stop has already been passed.
+    func stopDistance(currentPrice: Double?) -> Double? {
+        guard isStopOrder, let stop = stopPrice.value, let px = currentPrice, px > 0 else { return nil }
+        let d = side.lowercased() == "buy" ? (stop - px) / px : (px - stop) / px
+        return d >= 0 ? d : nil
+    }
+
+    /// "trail 2%" or "trail $1.50" for trailing stops; nil otherwise.
+    var trailDescription: String? {
+        if let p = trailPercent.value { return "trail \(p.formatted(.number.precision(.fractionLength(0...2))))%" }
+        if let p = trailPrice.value { return "trail $\(p.formatted(.number.precision(.fractionLength(2))))" }
+        return nil
     }
 
     /// e.g. "Stop Buy GTC", "Market Sell Day"
@@ -224,5 +247,32 @@ enum ChartRange: String, CaseIterable, Identifiable {
             }
             return [.init(name: "period", value: "5A"), .init(name: "timeframe", value: "1D")]
         }
+    }
+}
+
+/// GET /v2/clock
+struct MarketClock: Codable, Hashable {
+    let timestamp: Date
+    let isOpen: Bool
+    let nextOpen: Date
+    let nextClose: Date
+
+    enum CodingKeys: String, CodingKey {
+        case timestamp
+        case isOpen = "is_open"
+        case nextOpen = "next_open"
+        case nextClose = "next_close"
+    }
+
+    /// "Market open · closes 2:00 PM" / "Market closed · opens Mon 7:30 AM", in the device's time zone.
+    var summary: String {
+        let cal = Calendar.current
+        func when(_ d: Date) -> String {
+            let time = d.formatted(date: .omitted, time: .shortened)
+            if cal.isDateInToday(d) { return time }
+            if cal.isDateInTomorrow(d) { return "tomorrow \(time)" }
+            return d.formatted(.dateTime.weekday(.abbreviated)) + " " + time
+        }
+        return isOpen ? "Market open · closes \(when(nextClose))" : "Market closed · opens \(when(nextOpen))"
     }
 }

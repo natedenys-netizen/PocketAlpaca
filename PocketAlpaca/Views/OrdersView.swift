@@ -12,14 +12,14 @@ struct OrdersView: View {
                     if model.openOrders.isEmpty {
                         Text("No open orders").foregroundStyle(.secondary)
                     } else {
-                        ForEach(model.openOrders) { OrderRow(order: $0) }
+                        ForEach(model.openOrders) { OrderRow(order: $0, currentPrice: model.currentPrice(for: $0.symbol)) }
                     }
                 }
                 Section(header: Text("Recent")) {
                     if model.recentOrders.isEmpty {
                         Text("No recent orders").foregroundStyle(.secondary)
                     } else {
-                        ForEach(model.recentOrders) { OrderRow(order: $0) }
+                        ForEach(model.recentOrders) { OrderRow(order: $0, currentPrice: nil) }
                     }
                 }
             }
@@ -31,6 +31,8 @@ struct OrdersView: View {
 
 struct OrderRow: View {
     let order: Order
+    /// Current price of the matching position, for the distance-to-stop readout.
+    var currentPrice: Double? = nil
 
     private var statusColor: Color {
         switch order.status.lowercased() {
@@ -51,9 +53,20 @@ struct OrderRow: View {
                         .background(statusColor.opacity(0.15), in: Capsule())
                         .foregroundStyle(statusColor)
                 }
-                Text(order.summary).font(.caption).foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text(order.summary)
+                    if let t = order.trailDescription { Text("· \(t)") }
+                }
+                .font(.caption).foregroundStyle(.secondary)
                 if let sp = order.stopPrice.value {
-                    Text("stop \(Fmt.price(sp))").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        Text("stop \(Fmt.price(sp))")
+                        if let d = order.stopDistance(currentPrice: currentPrice) {
+                            Text("· \(Fmt.percent(d, signed: false)) away")
+                                .foregroundStyle(d < 0.01 ? Color.orange : Color.secondary)
+                        }
+                    }
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
                 if let lp = order.limitPrice.value {
                     Text("limit \(Fmt.price(lp))").font(.caption.monospacedDigit()).foregroundStyle(.secondary)

@@ -15,6 +15,7 @@ final class AppModel {
     var openOrders: [Order] = []
     var recentOrders: [Order] = []
     var history: [ChartRange: PortfolioHistory] = [:]
+    var clock: MarketClock?
 
     var isRefreshing = false
     var lastRefresh: Date?
@@ -75,7 +76,7 @@ final class AppModel {
     }
 
     private func clearData() {
-        account = nil; positions = []; openOrders = []; recentOrders = []; history = [:]
+        account = nil; positions = []; openOrders = []; recentOrders = []; history = [:]; clock = nil
         lastError = nil; lastRefresh = nil
     }
 
@@ -90,11 +91,13 @@ final class AppModel {
             async let p = client.positions()
             async let o = client.orders(open: true, limit: 50)
             async let r = client.orders(open: false, limit: 30)
-            let (acct, pos, open, recent) = try await (a, p, o, r)
+            async let c = client.clock()
+            let (acct, pos, open, recent, clk) = try await (a, p, o, r, c)
             account = acct
             positions = pos.sorted { $0.symbol < $1.symbol }
             openOrders = open
             recentOrders = recent
+            clock = clk
             lastError = nil
             lastRefresh = Date()
         } catch {
@@ -116,6 +119,11 @@ final class AppModel {
     }
 
     // MARK: - Derived
+
+    /// Current price of an open position, used to show how far a stop order is from triggering.
+    func currentPrice(for symbol: String) -> Double? {
+        positions.first { $0.symbol == symbol }?.currentPrice.value
+    }
 
     var totalUnrealizedPl: Double { positions.compactMap { $0.unrealizedPl.value }.reduce(0, +) }
     var winners: Int { positions.filter { ($0.unrealizedPl.value ?? 0) > 0 }.count }
