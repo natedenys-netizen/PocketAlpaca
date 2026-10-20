@@ -48,9 +48,15 @@ struct OverviewView: View {
             }
             .pickerStyle(.segmented)
 
-            if let h = model.history[range], !h.points.isEmpty {
-                EquityChart(points: h.points, range: range)
-                    .frame(height: 220)
+            if let h = model.history[range] {
+                if h.points.isEmpty {
+                    ContentUnavailableView("No history for this range", systemImage: "chart.xyaxis.line",
+                                           description: Text("Alpaca returned no equity for these dates."))
+                        .frame(maxWidth: .infinity, minHeight: 220)
+                } else {
+                    EquityChart(points: h.points, range: range)
+                        .frame(height: 220)
+                }
             } else {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 220)
@@ -112,7 +118,11 @@ struct EquityChart: View {
             AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { v in
                 AxisGridLine().foregroundStyle(.quaternary)
                 AxisValueLabel {
-                    if let d = v.as(Double.self) { Text(d.formatted(.currency(code: "USD").precision(.fractionLength(0)))).font(.caption2) }
+                    if let d = v.as(Double.self) {
+                        // Whole dollars normally; cents only when the whole range is tiny.
+                        let digits = (hi - lo) < 10 ? 2 : 0
+                        Text(d.formatted(.currency(code: "USD").precision(.fractionLength(digits)))).font(.caption2)
+                    }
                 }
             }
         }

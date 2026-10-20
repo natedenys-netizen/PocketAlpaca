@@ -190,11 +190,15 @@ struct PortfolioHistory: Codable, Hashable {
         let equity: Double
     }
 
+    /// Chart points. Days before the account was funded come back as 0 (or null)
+    /// and would flatten the whole chart, so leading non-positive points are dropped.
     var points: [Point] {
-        zip(timestamp, equity).compactMap { ts, eq in
+        let all = zip(timestamp, equity).compactMap { ts, eq -> Point? in
             guard let eq else { return nil }
             return Point(id: ts, date: Date(timeIntervalSince1970: TimeInterval(ts)), equity: eq)
         }
+        guard let first = all.firstIndex(where: { $0.equity > 0 }) else { return [] }
+        return Array(all[first...])
     }
 }
 
@@ -212,7 +216,11 @@ enum ChartRange: String, CaseIterable, Identifiable {
         case .year:  return [.init(name: "period", value: "1A"), .init(name: "timeframe", value: "1D")]
         case .all:
             if let created = accountCreated {
-                return [.init(name: "start", value: created.formatted(.iso8601)), .init(name: "timeframe", value: "1D")]
+                // Without an explicit end, Alpaca applies its default one-month
+                // period on top of `start`; send both ends of the window.
+                return [.init(name: "start", value: created.formatted(.iso8601)),
+                        .init(name: "end", value: Date().formatted(.iso8601)),
+                        .init(name: "timeframe", value: "1D")]
             }
             return [.init(name: "period", value: "5A"), .init(name: "timeframe", value: "1D")]
         }
