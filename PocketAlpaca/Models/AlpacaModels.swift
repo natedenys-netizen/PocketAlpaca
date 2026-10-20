@@ -50,9 +50,11 @@ struct Account: Codable, Hashable {
     let shortMarketValue: StringDouble
     let daytradeCount: Int?
     let patternDayTrader: Bool?
+    let createdAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id, status, currency, equity, cash
+        case createdAt = "created_at"
         case accountNumber = "account_number"
         case lastEquity = "last_equity"
         case buyingPower = "buying_power"
@@ -200,13 +202,19 @@ enum ChartRange: String, CaseIterable, Identifiable {
     case day = "1D", month = "1M", year = "1Y", all = "All"
     var id: String { rawValue }
 
-    /// Query parameters for GET /v2/account/portfolio/history
-    var query: [URLQueryItem] {
+    /// Query parameters for GET /v2/account/portfolio/history.
+    /// "All" starts at the account's creation date when known (Alpaca has no
+    /// documented "all" period); otherwise it falls back to five years.
+    func query(accountCreated: Date?) -> [URLQueryItem] {
         switch self {
-        case .day:   return [.init(name: "period", value: "1D"),  .init(name: "timeframe", value: "5Min"), .init(name: "intraday_reporting", value: "extended_hours")]
-        case .month: return [.init(name: "period", value: "1M"),  .init(name: "timeframe", value: "1D")]
-        case .year:  return [.init(name: "period", value: "1A"),  .init(name: "timeframe", value: "1D")]
-        case .all:   return [.init(name: "period", value: "all"), .init(name: "timeframe", value: "1D")]
+        case .day:   return [.init(name: "period", value: "1D"), .init(name: "timeframe", value: "5Min"), .init(name: "intraday_reporting", value: "extended_hours")]
+        case .month: return [.init(name: "period", value: "1M"), .init(name: "timeframe", value: "1D")]
+        case .year:  return [.init(name: "period", value: "1A"), .init(name: "timeframe", value: "1D")]
+        case .all:
+            if let created = accountCreated {
+                return [.init(name: "start", value: created.formatted(.iso8601)), .init(name: "timeframe", value: "1D")]
+            }
+            return [.init(name: "period", value: "5A"), .init(name: "timeframe", value: "1D")]
         }
     }
 }

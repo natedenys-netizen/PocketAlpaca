@@ -18,7 +18,8 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
 
-                    LabeledContent("Token", value: model.hasToken ? "Saved in Keychain" : "None")
+                    LabeledContent("Paper token", value: model.hasToken(for: .paper) ? "Saved" : "None")
+                    LabeledContent("Live token", value: model.hasToken(for: .live) ? "Saved" : "None")
                     if let a = model.account, model.hasToken {
                         LabeledContent("Account", value: a.accountNumber ?? "—")
                         LabeledContent("Status", value: a.status ?? "—")
@@ -35,14 +36,14 @@ struct SettingsView: View {
                     }
                     .disabled(tokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 } header: {
-                    Text(model.hasToken ? "Replace token" : "Sign in")
+                    Text(model.hasToken ? "Replace \(model.environment.label) token" : "Sign in to \(model.environment.label)")
                 } footer: {
-                    Text("Get the token once by running the OAuth script on your Mac (Scripts/alpaca_oauth_once.py). It is read-only and stays in this phone's Keychain. Revoke it any time at app.alpaca.markets under Connected Apps.")
+                    Text("The token is saved for the environment selected above (\(model.environment.label)). Get one by running Scripts/alpaca_oauth_once.py --env \(model.environment.rawValue) on your Mac. It is read-only and stays in this phone's Keychain. Revoke it any time at app.alpaca.markets under Connected Apps.")
                 }
 
                 if model.hasToken {
                     Section {
-                        Button("Sign out", role: .destructive) { confirmSignOut = true }
+                        Button("Sign out of \(model.environment.label)", role: .destructive) { confirmSignOut = true }
                     }
                 }
 
@@ -54,7 +55,7 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
-            .confirmationDialog("Remove the token from this phone?", isPresented: $confirmSignOut, titleVisibility: .visible) {
+            .confirmationDialog("Remove the \(model.environment.label) token from this phone?", isPresented: $confirmSignOut, titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) { model.clearToken() }
             }
         }

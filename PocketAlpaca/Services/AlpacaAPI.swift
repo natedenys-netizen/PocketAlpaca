@@ -22,7 +22,7 @@ protocol AlpacaClient: Sendable {
     func account() async throws -> Account
     func positions() async throws -> [Position]
     func orders(open: Bool, limit: Int) async throws -> [Order]
-    func portfolioHistory(_ range: ChartRange) async throws -> PortfolioHistory
+    func portfolioHistory(_ range: ChartRange, accountCreated: Date?) async throws -> PortfolioHistory
 }
 
 /// Read-only client. Every call is GET; nothing here can place or change an order.
@@ -86,8 +86,8 @@ struct LiveAlpacaClient: AlpacaClient {
         ])
     }
 
-    func portfolioHistory(_ range: ChartRange) async throws -> PortfolioHistory {
-        try await get("account/portfolio/history", range.query)
+    func portfolioHistory(_ range: ChartRange, accountCreated: Date?) async throws -> PortfolioHistory {
+        try await get("account/portfolio/history", range.query(accountCreated: accountCreated))
     }
 }
 
@@ -98,7 +98,7 @@ struct MockAlpacaClient: AlpacaClient {
                 equity: .init(3062.70), lastEquity: .init(3056.30), buyingPower: .init(9137.45),
                 cash: .init(1200), portfolioValue: .init(3062.70),
                 longMarketValue: .init(1480.12), shortMarketValue: .init(-382.40),
-                daytradeCount: 0, patternDayTrader: false)
+                daytradeCount: 0, patternDayTrader: false, createdAt: Date().addingTimeInterval(-400 * 86400))
     }
 
     func positions() async throws -> [Position] {
@@ -130,7 +130,7 @@ struct MockAlpacaClient: AlpacaClient {
         ].filter { open ? $0.isOpen : !$0.isOpen }
     }
 
-    func portfolioHistory(_ range: ChartRange) async throws -> PortfolioHistory {
+    func portfolioHistory(_ range: ChartRange, accountCreated: Date?) async throws -> PortfolioHistory {
         let n = 60
         let start = Int(Date().timeIntervalSince1970) - n * 300
         var eq: [Double?] = []

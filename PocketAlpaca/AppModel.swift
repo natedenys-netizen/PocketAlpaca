@@ -27,7 +27,7 @@ final class AppModel {
 
     init() {
         let env = TokenStore.environment
-        let token = TokenStore.load()
+        let token = TokenStore.load(for: env)
         environment = env
         hasToken = token != nil
         client = token.map { LiveAlpacaClient(environment: env, token: $0) } ?? MockAlpacaClient()
@@ -35,22 +35,26 @@ final class AppModel {
 
     // MARK: - Token / environment
 
+    /// True when a token is saved for the given environment (not necessarily the current one).
+    func hasToken(for env: AlpacaEnvironment) -> Bool { TokenStore.load(for: env) != nil }
+
+    /// Saves the token for the CURRENT environment and reloads.
     func setToken(_ token: String) {
-        guard TokenStore.save(token) else { return }
-        hasToken = true
+        guard TokenStore.save(token, for: environment) else { return }
         rebuildClient()
         clearData()
         Task { await refreshAll() }
     }
 
+    /// Removes the CURRENT environment's token and falls back to sample data.
     func clearToken() {
-        TokenStore.delete()
-        hasToken = false
+        TokenStore.delete(for: environment)
         rebuildClient()
         clearData()
         Task { await refreshAll() }
     }
 
+    /// Switches environment; each environment keeps its own token.
     func setEnvironment(_ env: AlpacaEnvironment) {
         guard env != environment else { return }
         environment = env
@@ -61,10 +65,12 @@ final class AppModel {
     }
 
     private func rebuildClient() {
-        if let token = TokenStore.load() {
+        if let token = TokenStore.load(for: environment) {
             client = LiveAlpacaClient(environment: environment, token: token)
+            hasToken = true
         } else {
             client = MockAlpacaClient()
+            hasToken = false
         }
     }
 
@@ -99,7 +105,11 @@ final class AppModel {
     func loadHistory(_ range: ChartRange, force: Bool = false) async {
         if !force, history[range] != nil { return }
         do {
-            history[range] = try await client.portfolioHistory(range)
+            if range == .all, account == nil {
+                // "All" is anchored to the account's creation date; make sure we have it.
+                account = try await client.account()
+            }
+            history[range] = try await client.portfolioHistory(range, accountCreated: account?.createdAt)
         } catch {
             lastError = (error as? AlpacaError)?.errorDescription ?? error.localizedDescription
         }
