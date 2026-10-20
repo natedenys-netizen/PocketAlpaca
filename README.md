@@ -5,13 +5,15 @@ A private, read-only iPhone view of one Alpaca account. Built on the
 runs outside the Google Apps Script quota and never touches the trading
 engines. It cannot place, change, or cancel an order: every request is a GET.
 
-Three screens:
+Four tabs plus a home-screen widget:
 
 | Tab | Shows | Alpaca endpoint |
 |---|---|---|
 | Overview | equity, today's change, portfolio chart (1D / 1M / 1Y / All), buying power, cash | `GET /v2/account`, `GET /v2/account/portfolio/history` |
 | Positions | each position with signed qty, avg entry, current price, unrealized $ and % | `GET /v2/positions` |
-| Orders | open orders, then recent closed orders | `GET /v2/orders?status=open`, `?status=closed` |
+| Orders | open orders with distance to stop, then recent closed orders | `GET /v2/orders?status=open`, `?status=closed` |
+| Fills | recent executions grouped by day | `GET /v2/account/activities/FILL` |
+| Widget | equity, day change, long/short, market open/closed | `GET /v2/account`, `GET /v2/clock` |
 
 Percent P/L comes straight from Alpaca's `unrealized_plpc`. It is never
 recomputed from quantity, which is how the retired Alpaca app showed NaN%.
@@ -19,18 +21,27 @@ recomputed from quantity, which is how the retired Alpaca app showed NaN%.
 ## Layout
 
 ```
-PocketAlpaca/
+Shared/                      compiled into BOTH the app and the widget
+  AlpacaModels.swift         Codable types (Account, Position, Order, Fill, PortfolioHistory, MarketClock)
+  AlpacaAPI.swift            read-only HTTP client + a mock client for previews
+  TokenStore.swift           Keychain storage for the OAuth tokens (one per environment)
+  Formatting.swift           money / percent / colour helpers
+PocketAlpaca/                the app
   PocketAlpacaApp.swift      entry point; creates the AppModel
   AppModel.swift             one observable store: client, data, refresh, errors
-  Models/AlpacaModels.swift  Codable types (Account, Position, Order, PortfolioHistory)
-  Services/AlpacaAPI.swift   read-only HTTP client + a mock client for previews
-  Services/TokenStore.swift  Keychain storage for the OAuth token
-  Views/                     RootTabView, OverviewView, PositionsView, OrdersView, SettingsView
+  Views/                     RootTabView, Overview, Positions (+ detail sheet), Orders, Fills, Settings
+  PocketAlpaca.entitlements  App Group shared with the widget
+PocketAlpacaWidget/          home-screen widget (small + medium): equity, day change, long/short, market status
 Scripts/alpaca_oauth_once.py one-time sign-in on the Mac; prints the token once
+Scripts/make_logo.swift      renders the logo / app icon
 ```
 
-New `.swift` files dropped anywhere under `PocketAlpaca/` join the target
-automatically (Xcode 16 synchronized folders).
+New `.swift` files dropped under `PocketAlpaca/`, `PocketAlpacaWidget/`, or
+`Shared/` join the right target automatically (Xcode 16 synchronized folders).
+
+The app and the widget share one App Group, `group.com.natedenys.PocketAlpaca`.
+It doubles as the Keychain access group, so the widget can read the token and
+refresh on its own (every 20 minutes while the market is open, hourly otherwise).
 
 ## Build from the terminal
 
