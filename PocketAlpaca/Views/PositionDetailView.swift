@@ -6,6 +6,7 @@ struct PositionDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let position: Position
+    @State private var showChart = false
 
     /// Always show the freshest copy if the list has refreshed since the sheet opened.
     private var live: Position { model.positions.first { $0.id == position.id } ?? position }
@@ -73,7 +74,15 @@ struct PositionDetailView: View {
             .listStyle(.insetGrouped)
             .navigationTitle(live.symbol)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button { showChart = true } label: { Label("Chart", systemImage: "chart.xyaxis.line") }
+                }
+                ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
+            }
+            .sheet(isPresented: $showChart) {
+                ChartSheet(symbol: live.symbol, subtitle: "\(live.isShort ? "Short" : "Long") \(Fmt.qty(live.signedQty)) sh · avg \(Fmt.price(live.avgEntryPrice.value))")
+            }
         }
     }
 

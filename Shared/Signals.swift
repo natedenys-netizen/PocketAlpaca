@@ -51,6 +51,30 @@ struct CloudTierRow: Codable, Hashable, Identifiable {
     var rank: Int { Int(tier.dropFirst()) ?? 9 }
 }
 
+extension CloudTierRow {
+    struct Factor: Hashable { let name: String; let ok: Bool }
+
+    /// The four things the morning screen scores, read against this row's side.
+    /// For a long: daily above the cloud, green cloud, TK bull cross, hourly above.
+    /// For a short: daily below, red cloud, TK bear cross, hourly below.
+    var confluence: [Factor] {
+        let pos = isShort ? "below" : "above"
+        let colour = isShort ? "red" : "green"
+        let tk = isShort ? "bear" : "bull"
+        return [
+            Factor(name: "daily \(pos)", ok: (dailyPos ?? "").lowercased() == pos),
+            Factor(name: "\(colour) cloud", ok: (cloudColor ?? "").lowercased() == colour),
+            Factor(name: "TK \(tk)", ok: (tkCross ?? "").lowercased() == tk),
+            Factor(name: "hourly \(pos)", ok: (hourlyPos ?? "").lowercased() == pos),
+        ]
+    }
+    var confluenceCount: Int { confluence.filter(\.ok).count }
+    var isFullConfluence: Bool { confluenceCount == confluence.count }
+    /// Ichi score is daily ±20, cloud ±10, TK +10/−5: +40 and −35 are the extremes.
+    var ichiAtExtreme: Bool { isShort ? (ichiScore ?? 0) <= -35 : (ichiScore ?? 0) >= 40 }
+    var ichiStrength: Double { abs(ichiScore ?? 0) }
+}
+
 struct CloudTiersSection: Codable, Hashable {
     let scanDate: String?
     let scanTime: String?
@@ -116,19 +140,40 @@ struct EarningsSection: Codable, Hashable {
 /// by the model so the choice sticks between launches.
 struct SignalsFilter: Codable, Hashable {
     enum View: String, Codable, CaseIterable, Identifiable {
-        case cloud, earnings, both
+        case cloud, earnings, patterns, both
         var id: String { rawValue }
-        var label: String { self == .cloud ? "Cloud Tiers" : (self == .earnings ? "Earnings" : "Both") }
+        var label: String {
+            switch self {
+            case .cloud: return "Cloud"
+            case .earnings: return "Earnings"
+            case .patterns: return "Patterns"
+            case .both: return "All"
+            }
+        }
         var section: String { self == .both ? "all" : rawValue }
+        var showsCloud: Bool { self == .cloud || self == .both }
+        var showsEarnings: Bool { self == .earnings || self == .both }
+        var showsPatterns: Bool { self == .patterns || self == .both }
+    }
+    enum PatternCategory: String, Codable, CaseIterable, Identifiable {
+        case all, candlestick, harmonic, chart
+        var id: String { rawValue }
+        var label: String { self == .all ? "All patterns" : rawValue.capitalized }
+    }
+    enum PatternDirection: String, Codable, CaseIterable, Identifiable {
+        case all, bullish, bearish
+        var id: String { rawValue }
+        var label: String { self == .all ? "Both directions" : rawValue.capitalized }
     }
     enum TierSort: String, Codable, CaseIterable, Identifiable {
-        case tier, rvol, ichi, price
+        case tier, confluence, rvol, ichi, price
         var id: String { rawValue }
         var label: String {
             switch self {
             case .tier: return "Tier"
+            case .confluence: return "Confluence first"
             case .rvol: return "RVOL, highest first"
-            case .ichi: return "Ichi score, highest first"
+            case .ichi: return "Ichi score, strongest first"
             case .price: return "Price, lowest first"
             }
         }
@@ -145,6 +190,9 @@ struct SignalsFilter: Codable, Hashable {
     var earningsDays: Int = 7         // 0 = all
     var callsOnly: Bool = false       // earnings rows with a Reaction Call only
     var refusedOnly: Bool = false     // only candidates an engine recently refused
+    var confluenceOnly: Bool = false  // cloud rows where all four factors agree
+    var patternCategory: PatternCategory = .all
+    var patternDirection: PatternDirection = .all
 
     /// Tier labels in canonical order, for the request and the header.
     var orderedTiers: [String] { Self.allTiers.filter { tiers.contains($0) } }
@@ -296,6 +344,63 @@ struct RefusalsSection: Codable, Hashable {
     let ecs: RefusalGroup
 }
 
+/// One detected pattern from 1b's Candlestick / Harmonic / Chart sheets.
+struct PatternRow: Codable, Hashable, Identifiable {
+    let fields: [String: Flex]
+
+    init(from decoder: Decoder) throws {
+        fields = try decoder.singleValueContainer().decode([String: Flex].self)
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(fields)
+    }
+
+    private func s(_ key: String) -> String? {
+        guard let f = fields[key], !f.isEmpty else { return nil }
+        return f.text
+    }
+
+    var category: String { s("category") ?? "?" }
+    var symbol: String { s("symbol") ?? "?" }
+    var pattern: String { s("pattern") ?? "?" }
+    var id: String { category + "|" + symbol + "|" + pattern + "|" + (s("date") ?? "") }
+    var direction: String? { s("direction")?.uppercased() }
+    var isBullish: Bool { direction == "BULLISH" }
+    var isBearish: Bool { direction == "BEARISH" }
+    var confidence: Double? { fields["confidence"]?.number }
+    var strength: String? { s("strength") }
+    var price: Double? { fields["price"]?.number }
+    var rvol: Double? { fields["rvol"]?.number }
+    var targetPct: Double? { fields["target"]?.number }
+    var stopPct: Double? { fields["stop"]?.number }
+    var rr: Double? { fields["rR"]?.number ?? fields["rr"]?.number }
+    var description: String? { s("description") }
+    var cheatsheetPattern: String? { s("cheatsheetPattern") }
+    var entryRule: String? { s("entryRule") }
+    var stopRule: String? { s("stopRule") }
+    var date: String? { s("date") }
+
+    /// Confidence as a 0...1 fraction whether the sheet stored 0.82 or 82.
+    var confidenceFraction: Double? {
+        guard let c = confidence else { return nil }
+        return c > 1 ? c / 100 : c
+    }
+}
+
+struct PatternCategoryInfo: Codable, Hashable {
+    let total: Int
+    let bullish: Int
+    let bearish: Int
+    let scanDate: String?
+}
+
+struct PatternsSection: Codable, Hashable {
+    let cap: Int?
+    let categories: [String: PatternCategoryInfo]
+    let rows: [PatternRow]
+}
+
 struct SignalsPayload: Codable, Hashable {
     let ok: Bool
     let error: String?
@@ -307,6 +412,7 @@ struct SignalsPayload: Codable, Hashable {
     let ledger: LedgerSection?
     let scorecard: ScorecardSection?
     let refusals: RefusalsSection?
+    let patterns: PatternsSection?
 }
 
 enum SignalsError: LocalizedError {
@@ -355,7 +461,8 @@ struct SignalsClient: Sendable {
                             .init(name: "earningsDays", value: String(filter.earningsDays)),
                             .init(name: "ledger", value: "1"),
                             .init(name: "scorecard", value: "1"),
-                            .init(name: "refusals", value: "1")]
+                            .init(name: "refusals", value: "1"),
+                            .init(name: "patterns", value: "1")]
         var req = URLRequest(url: comps.url!)
         req.timeoutInterval = 30
         let (data, response): (Data, URLResponse)

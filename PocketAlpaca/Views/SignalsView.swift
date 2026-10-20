@@ -5,8 +5,15 @@ import SwiftUI
 struct SignalsView: View {
     @Environment(AppModel.self) private var model
     @State private var showSettings = false
-    @State private var selectedPosition: Position?
+    @State private var chartTarget: ChartTarget?
     @State private var search = ""
+
+    struct ChartTarget: Identifiable {
+        let symbol: String
+        let subtitle: String
+        let notes: [String]
+        var id: String { symbol + subtitle }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,7 +31,7 @@ struct SignalsView: View {
             }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
-        .sheet(item: $selectedPosition) { PositionDetailView(position: $0) }
+        .sheet(item: $chartTarget) { ChartSheet(symbol: $0.symbol, subtitle: $0.subtitle, notes: $0.notes) }
         .searchable(text: $search, prompt: "Symbol")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -33,7 +40,8 @@ struct SignalsView: View {
                     Picker("Show", selection: $model.signalsFilter.view) {
                         ForEach(SignalsFilter.View.allCases) { Text($0.label).tag($0) }
                     }
-                    if model.signalsFilter.view != .earnings {
+                    if model.signalsFilter.view.showsCloud {
+                        Toggle("Only full confluence (4 of 4)", isOn: $model.signalsFilter.confluenceOnly)
                         Menu("Tiers · \(model.signalsFilter.tierLabel)") {
                             ForEach(SignalsFilter.allTiers, id: \.self) { t in
                                 Toggle(t, isOn: Binding(
@@ -56,7 +64,15 @@ struct SignalsView: View {
                         }
                     }
                     Toggle("Only candidates an engine refused", isOn: $model.signalsFilter.refusedOnly)
-                    if model.signalsFilter.view != .cloud {
+                    if model.signalsFilter.view.showsPatterns {
+                        Picker("Pattern type", selection: $model.signalsFilter.patternCategory) {
+                            ForEach(SignalsFilter.PatternCategory.allCases) { Text($0.label).tag($0) }
+                        }
+                        Picker("Pattern direction", selection: $model.signalsFilter.patternDirection) {
+                            ForEach(SignalsFilter.PatternDirection.allCases) { Text($0.label).tag($0) }
+                        }
+                    }
+                    if model.signalsFilter.view.showsEarnings {
                         Picker("Earnings window · \(model.signalsFilter.daysLabel)", selection: $model.signalsFilter.earningsDays) {
                             ForEach(SignalsFilter.dayChoices, id: \.self) { d in
                                 Text(d == 0 ? "All dates" : "Next \(d) days").tag(d)
@@ -83,24 +99,42 @@ struct SignalsView: View {
             .pickerStyle(.segmented)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
-                    if model.signalsFilter.view != .earnings {
+                    if model.signalsFilter.view.showsCloud {
                         Pill(text: model.signalsFilter.tierLabel, tint: .blue)
                         Pill(text: model.signalsFilter.priceLabel, tint: .blue)
+                        if model.signalsFilter.confluenceOnly { Pill(text: "full confluence", tint: .blue) }
                         if model.signalsFilter.tierSort != .tier { Pill(text: "sort: \(model.signalsFilter.tierSort.label)", tint: .blue) }
                     }
-                    if model.signalsFilter.view != .cloud {
+                    if model.signalsFilter.view.showsPatterns {
+                        Pill(text: model.signalsFilter.patternCategory.label, tint: .teal)
+                        if model.signalsFilter.patternDirection != .all { Pill(text: model.signalsFilter.patternDirection.label, tint: .teal) }
+                    }
+                    if model.signalsFilter.view.showsEarnings {
                         Pill(text: model.signalsFilter.daysLabel, tint: .purple)
                         if model.signalsFilter.callsOnly { Pill(text: "calls only", tint: .purple) }
                     }
+                    if model.signalsFilter.refusedOnly { Pill(text: "refused only", tint: .orange) }
                 }
             }
         }
         .padding(.vertical, 4)
     }
 
+    /// Confluence plus a bonus when a same-direction pattern fired today.
+    private func confluenceScore(_ row: CloudTierRow) -> Int {
+        row.confluenceCount + (model.patterns(for: row.symbol, side: row.side).isEmpty ? 0 : 1)
+    }
+
     private func sortedCloud(_ rows: [CloudTierRow]) -> [CloudTierRow] {
         switch model.signalsFilter.tierSort {
         case .tier:  return rows.sorted { ($0.rank, $0.symbol) < ($1.rank, $1.symbol) }
+        case .confluence:
+            return rows.sorted {
+                let a = confluenceScore($0), b = confluenceScore($1)
+                if a != b { return a > b }
+                if $0.ichiStrength != $1.ichiStrength { return $0.ichiStrength > $1.ichiStrength }
+                return ($0.rank, $0.symbol) < ($1.rank, $1.symbol)
+            }
         case .rvol:  return rows.sorted { ($0.rvol ?? -1) > ($1.rvol ?? -1) }
         case .ichi:  return rows.sorted { ($0.ichiScore ?? -1) > ($1.ichiScore ?? -1) }
         case .price: return rows.sorted { ($0.price ?? .infinity) < ($1.price ?? .infinity) }
@@ -133,10 +167,14 @@ struct SignalsView: View {
                 }
             }
 
-            if model.signalsFilter.view != .earnings, let cloud = model.signals?.cloudTiers {
+            if model.signalsFilter.view.showsCloud, let cloud = model.signals?.cloudTiers {
                 let refusedOnly = model.signalsFilter.refusedOnly
-                let longs = sortedCloud(cloud.rows.filter { !$0.isShort && matches($0.symbol) && (!refusedOnly || model.coreRefusal(symbol: $0.symbol, side: $0.side) != nil) })
-                let shorts = sortedCloud(cloud.rows.filter { $0.isShort && matches($0.symbol) && (!refusedOnly || model.coreRefusal(symbol: $0.symbol, side: $0.side) != nil) })
+                let fullOnly = model.signalsFilter.confluenceOnly
+                let keep: (CloudTierRow) -> Bool = { r in
+                    matches(r.symbol) && (!refusedOnly || model.coreRefusal(symbol: r.symbol, side: r.side) != nil) && (!fullOnly || r.isFullConfluence)
+                }
+                let longs = sortedCloud(cloud.rows.filter { !$0.isShort && keep($0) })
+                let shorts = sortedCloud(cloud.rows.filter { $0.isShort && keep($0) })
                 let scope = "of \(cloud.totalRows ?? cloud.rows.count) on the sheet"
                 if !longs.isEmpty || model.signalsFilter.tiers.contains(where: { $0.hasPrefix("T") }) {
                     Section {
@@ -156,7 +194,11 @@ struct SignalsView: View {
                 }
             }
 
-            if model.signalsFilter.view != .cloud, let earn = model.signals?.earnings {
+            if model.signalsFilter.view.showsPatterns, let pats = model.signals?.patterns {
+                patternSections(pats)
+            }
+
+            if model.signalsFilter.view.showsEarnings, let earn = model.signals?.earnings {
                 let visible = earn.rows.filter { matches($0.symbol) && (!model.signalsFilter.callsOnly || !($0.reactionCall ?? "").isEmpty)
                                                  && (!model.signalsFilter.refusedOnly || model.ecsRefusal(symbol: $0.symbol) != nil) }
                 let groups = Dictionary(grouping: visible) { $0.section ?? "OTHER" }
@@ -215,8 +257,13 @@ struct SignalsView: View {
     }
 
     private func cloudRow(_ row: CloudTierRow) -> some View {
-        Button {
-            if let p = heldPosition(row.symbol) { selectedPosition = p }
+        let sideColor: Color = row.isShort ? .red : .green
+        let pats = model.patterns(for: row.symbol, side: row.side)
+        let full = row.isFullConfluence
+        return Button {
+            chartTarget = ChartTarget(symbol: row.symbol,
+                                      subtitle: "\(row.tier) \(row.side.capitalized) · \(row.confluenceCount)/4 aligned · Ichi \(Int(row.ichiScore ?? 0))",
+                                      notes: pats.map { "\($0.category.capitalized): \($0.pattern)" + ($0.entryRule.map { " — \($0)" } ?? "") })
         } label: {
             HStack(alignment: .top, spacing: 10) {
                 TierBadge(tier: row.tier, isShort: row.isShort)
@@ -225,15 +272,111 @@ struct SignalsView: View {
                         Text(row.symbol).font(.headline)
                         if let p = heldPosition(row.symbol) { HeldChip(position: p) }
                         else if let r = model.coreRefusal(symbol: row.symbol, side: row.side) { RefusalPill(row: r) }
+                        if full { Pill(text: "4/4", tint: sideColor) }
                     }
+                    confluenceLine(row, sideColor: sideColor)
                     Text(cloudDetail(row))
                         .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         .lineLimit(2)
+                    if !pats.isEmpty {
+                        HStack(spacing: 4) {
+                            ForEach(pats.prefix(2)) { Pill(text: $0.pattern, tint: .teal) }
+                            if pats.count > 2 { Text("+\(pats.count - 2)").font(.caption2).foregroundStyle(.secondary) }
+                        }
+                    }
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 3) {
                     Text(Fmt.price(row.price)).font(.body.monospacedDigit())
                     if let r = row.rvol { Text("RVOL \(r.formatted(.number.precision(.fractionLength(1))))").font(.caption.monospacedDigit()).foregroundStyle(.secondary) }
+                }
+            }
+            .padding(.vertical, 2)
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(confluenceBackground(row, sideColor: sideColor))
+    }
+
+    /// Four dots, one per factor, filled when it agrees with the side.
+    private func confluenceLine(_ row: CloudTierRow, sideColor: Color) -> some View {
+        HStack(spacing: 8) {
+            ForEach(row.confluence, id: \.self) { f in
+                HStack(spacing: 3) {
+                    Image(systemName: f.ok ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 9))
+                        .foregroundStyle(f.ok ? sideColor : Color.secondary.opacity(0.5))
+                    Text(f.name).font(.system(size: 10)).foregroundStyle(f.ok ? .primary : .secondary)
+                }
+            }
+        }
+        .lineLimit(1).minimumScaleFactor(0.8)
+    }
+
+    /// Outline the row when the factors line up: solid and tinted at 4/4, thin at 3/4.
+    private func confluenceBackground(_ row: CloudTierRow, sideColor: Color) -> some View {
+        let count = row.confluenceCount
+        return ZStack {
+            Color(.secondarySystemGroupedBackground)
+            if count == 4 { sideColor.opacity(0.10) }
+            if count >= 3 {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(sideColor.opacity(count == 4 ? 0.9 : 0.45), lineWidth: count == 4 ? 2.5 : 1)
+                    .padding(3)
+            }
+        }
+    }
+
+    // MARK: - Patterns
+
+    @ViewBuilder private func patternSections(_ pats: PatternsSection) -> some View {
+        let f = model.signalsFilter
+        let cats: [String] = f.patternCategory == .all ? ["candlestick", "harmonic", "chart"] : [f.patternCategory.rawValue]
+        ForEach(cats, id: \.self) { cat in
+            let rows = pats.rows.filter { r in
+                r.category == cat && matches(r.symbol)
+                    && (f.patternDirection == .all || (f.patternDirection == .bullish ? r.isBullish : r.isBearish))
+                    && (!f.refusedOnly || model.coreRefusal(symbol: r.symbol, side: r.isBearish ? "SHORT" : "LONG") != nil)
+            }.sorted { ($0.confidenceFraction ?? 0) > ($1.confidenceFraction ?? 0) }
+            let info = pats.categories[cat]
+            Section {
+                if rows.isEmpty { Text("No \(cat) patterns match").foregroundStyle(.secondary) }
+                ForEach(rows) { patternRow($0) }
+            } header: {
+                header("\(cat.capitalized) patterns", count: rows.count,
+                       detail: info.map { "\($0.bullish) bull · \($0.bearish) bear of \($0.total)" + ($0.scanDate.map { " · \(String($0.prefix(10)))" } ?? "") })
+            }
+        }
+    }
+
+    private func patternRow(_ r: PatternRow) -> some View {
+        let tint: Color = r.isBearish ? .red : (r.isBullish ? .green : .secondary)
+        return Button {
+            chartTarget = ChartTarget(symbol: r.symbol,
+                                      subtitle: "\(r.category.capitalized) · \(r.pattern)" + (r.direction.map { " · \($0.capitalized)" } ?? ""),
+                                      notes: [r.description, r.cheatsheetPattern.map { "Cheatsheet: \($0)" }, r.entryRule.map { "Entry: \($0)" }, r.stopRule.map { "Stop: \($0)" }].compactMap { $0 })
+        } label: {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(r.symbol).font(.headline)
+                        if let d = r.direction { Pill(text: d.capitalized, tint: tint) }
+                        if let p = heldPosition(r.symbol) { HeldChip(position: p) }
+                    }
+                    Text(r.pattern).font(.subheadline)
+                    HStack(spacing: 6) {
+                        if let st = r.strength, !st.isEmpty { Text(st) }
+                        if let rr = r.rr { Text("· R:R \(rr.formatted(.number.precision(.fractionLength(0...2))))") }
+                        if let t = r.targetPct { Text("· target \(t.formatted(.number.precision(.fractionLength(0...1))))%") }
+                        if let sp = r.stopPct { Text("· stop \(sp.formatted(.number.precision(.fractionLength(0...1))))%") }
+                    }
+                    .font(.caption.monospacedDigit()).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(Fmt.price(r.price)).font(.body.monospacedDigit())
+                    if let c = r.confidenceFraction {
+                        Text("\(Int((c * 100).rounded()))% conf").font(.caption.monospacedDigit()).foregroundStyle(tint)
+                    }
                 }
             }
             .padding(.vertical, 2)
@@ -253,7 +396,9 @@ struct SignalsView: View {
 
     private func earningsRow(_ row: EarningsRow) -> some View {
         Button {
-            if let p = heldPosition(row.symbol) { selectedPosition = p }
+            chartTarget = ChartTarget(symbol: row.symbol,
+                                      subtitle: "Earnings " + earningsWhen(row) + (row.section.map { " · \($0.capitalized)" } ?? ""),
+                                      notes: [row.take, row.catalystAngle.map { "Catalyst: \($0)" }, row.optionsPlay.map { "Options play: \($0)" }].compactMap { $0 })
         } label: {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {

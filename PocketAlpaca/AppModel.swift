@@ -225,6 +225,17 @@ final class AppModel {
         signals?.refusals?.ecs.rows.first { $0.symbol == symbol.uppercased() }
     }
 
+    /// Today's detected patterns for a symbol, optionally only those agreeing with a side.
+    func patterns(for symbol: String, side: String? = nil) -> [PatternRow] {
+        guard let rows = signals?.patterns?.rows else { return [] }
+        let sym = symbol.uppercased()
+        return rows.filter { r in
+            guard r.symbol == sym else { return false }
+            guard let side else { return true }
+            return side.uppercased() == "SHORT" ? r.isBearish : r.isBullish
+        }
+    }
+
     /// Held positions the ledger flags as unprotected or without a stop.
     var unprotectedPositions: [Position] {
         positions.filter { p in
