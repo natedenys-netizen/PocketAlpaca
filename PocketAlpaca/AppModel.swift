@@ -19,6 +19,11 @@ final class AppModel {
     var clock: MarketClock?
     var fills: [Fill] = []
 
+    // Signals (the engines' candidate lists), fetched separately from Alpaca.
+    var signals: SignalsPayload?
+    var signalsError: String?
+    var signalsLoadedAt: Date?
+
     var isRefreshing = false
     var lastRefresh: Date?
     var lastError: String?
@@ -121,6 +126,41 @@ final class AppModel {
             history[range] = try await client.portfolioHistory(range, accountCreated: account?.createdAt)
         } catch {
             lastError = (error as? AlpacaError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    // MARK: - Signals
+
+    var signalsConfigured: Bool { TokenStore.signalsEndpoint != nil && TokenStore.loadSignalsKey() != nil }
+
+    func setSignals(endpoint: String, key: String) {
+        let trimmedURL = endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        TokenStore.signalsEndpoint = URL(string: trimmedURL)
+        if !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { TokenStore.saveSignalsKey(key) }
+        signals = nil; signalsError = nil; signalsLoadedAt = nil
+        Task { await loadSignals(force: true) }
+    }
+
+    func clearSignals() {
+        TokenStore.signalsEndpoint = nil
+        TokenStore.deleteSignalsKey()
+        signals = nil; signalsError = nil; signalsLoadedAt = nil
+    }
+
+    /// Fetches the candidate lists. Cached for two minutes unless forced; the
+    /// endpoint itself caches for one, so pull-to-refresh is cheap either way.
+    func loadSignals(force: Bool = false) async {
+        guard let url = TokenStore.signalsEndpoint, let key = TokenStore.loadSignalsKey() else {
+            signalsError = SignalsError.notConfigured.errorDescription
+            return
+        }
+        if !force, let t = signalsLoadedAt, Date().timeIntervalSince(t) < 120, signals != nil { return }
+        do {
+            signals = try await SignalsClient(endpoint: url, key: key).fetch()
+            signalsError = nil
+            signalsLoadedAt = Date()
+        } catch {
+            signalsError = (error as? SignalsError)?.errorDescription ?? error.localizedDescription
         }
     }
 

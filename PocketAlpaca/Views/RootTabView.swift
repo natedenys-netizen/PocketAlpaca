@@ -34,6 +34,13 @@ struct RootTabView: View {
                     .toolbar { settingsButton }
             }
             .tabItem { Label("Fills", systemImage: "clock.arrow.circlepath") }
+
+            NavigationStack {
+                SignalsView()
+                    .navigationTitle("Signals")
+                    .toolbar { settingsButton }
+            }
+            .tabItem { Label("Signals", systemImage: "antenna.radiowaves.left.and.right") }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .task { await model.refreshAll() }

@@ -5,6 +5,9 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var tokenInput = ""
     @State private var confirmSignOut = false
+    @State private var signalsURLInput = TokenStore.signalsEndpoint?.absoluteString ?? ""
+    @State private var signalsKeyInput = ""
+    @State private var confirmClearSignals = false
 
     var body: some View {
         NavigationStack {
@@ -47,6 +50,24 @@ struct SettingsView: View {
                     }
                 }
 
+                Section {
+                    TextField("https://script.google.com/macros/s/…/exec", text: $signalsURLInput)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                    SecureField(model.signalsConfigured ? "New key (leave blank to keep)" : "Signals key", text: $signalsKeyInput)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    Button("Save signals") { model.setSignals(endpoint: signalsURLInput, key: signalsKeyInput); signalsKeyInput = "" }
+                        .disabled(URL(string: signalsURLInput.trimmingCharacters(in: .whitespacesAndNewlines)) == nil
+                                  || (!model.signalsConfigured && signalsKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
+                    if model.signalsConfigured {
+                        LabeledContent("Status", value: model.signalsError == nil ? (model.signals == nil ? "Saved" : "Connected") : "Error")
+                        Button("Disconnect signals", role: .destructive) { confirmClearSignals = true }
+                    }
+                } header: {
+                    Text("Signals")
+                } footer: {
+                    Text("The engines' candidate lists (Cloud Tiers and Earnings Watch) come from a read-only web endpoint in your Apps Script account. The URL is the deployment's /exec address; the key is printed once by setupSignalsApiKey().")
+                }
+
                 Section("About") {
                     LabeledContent("Access", value: "Read-only")
                     LabeledContent("Data", value: "Alpaca Trading API")
@@ -57,6 +78,9 @@ struct SettingsView: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
             .confirmationDialog("Remove the \(model.environment.label) token from this phone?", isPresented: $confirmSignOut, titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) { model.clearToken() }
+            }
+            .confirmationDialog("Forget the signals endpoint and key?", isPresented: $confirmClearSignals, titleVisibility: .visible) {
+                Button("Disconnect", role: .destructive) { model.clearSignals(); signalsURLInput = "" }
             }
         }
     }

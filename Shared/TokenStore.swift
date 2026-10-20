@@ -37,6 +37,27 @@ enum TokenStore {
 
     static func delete(for env: AlpacaEnvironment) { remove(account: account(for: env)) }
 
+    // MARK: - Signals API (endpoint URL is not secret; the key is)
+
+    private static let signalsURLKey = "signals-endpoint-url"
+    private static let signalsKeyAccount = "signals-api-key"
+
+    static var signalsEndpoint: URL? {
+        get { sharedDefaults.string(forKey: signalsURLKey).flatMap { URL(string: $0) } }
+        set { sharedDefaults.set(newValue?.absoluteString, forKey: signalsURLKey) }
+    }
+
+    static func loadSignalsKey() -> String? { read(account: signalsKeyAccount) }
+
+    @discardableResult
+    static func saveSignalsKey(_ key: String) -> Bool {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        return write(trimmed, account: signalsKeyAccount)
+    }
+
+    static func deleteSignalsKey() { remove(account: signalsKeyAccount) }
+
     // MARK: - Keychain primitives
 
     // Items are stored in the shared access group. If that is unavailable (no
