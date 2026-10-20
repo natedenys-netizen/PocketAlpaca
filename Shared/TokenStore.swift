@@ -56,7 +56,12 @@ enum TokenStore {
     private static func read(account: String) -> String? {
         if let v = read(account: account, shared: true) { return v }
         if let v = read(account: account, shared: false) {
-            if write(v, account: account, shared: true) { remove(account: account, shared: false) }
+            // Promote a pre-widget private item into the shared group. The old
+            // copy is deliberately left in place: a delete that names no access
+            // group removes the item from EVERY group this app can reach, which
+            // would take the freshly written shared copy with it. Sign-out
+            // clears both.
+            _ = write(v, account: account, shared: true)
             return v
         }
         return nil
@@ -85,8 +90,9 @@ enum TokenStore {
         return SecItemAdd(attrs as CFDictionary, nil) == errSecSuccess
     }
 
+    /// Removes the item from every access group this process can reach
+    /// (the unscoped delete does that on its own).
     private static func remove(account: String) {
-        remove(account: account, shared: true)
         remove(account: account, shared: false)
     }
 
