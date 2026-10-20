@@ -71,7 +71,7 @@ struct SettingsView: View {
                         Button("Test signals now") { Task { await model.loadSignals(force: true) } }
                         Button("Disconnect signals", role: .destructive) { confirmClearSignals = true }
                     }
-                    if let note = Provisioning.lastSummary {
+                    if let note = model.provisionNote {
                         Label(note, systemImage: "laptopcomputer.and.iphone").font(.footnote).foregroundStyle(.secondary)
                     }
                 } header: {

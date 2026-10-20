@@ -47,12 +47,25 @@ struct RootTabView: View {
         .task(id: scenePhase) {
             // Refresh every 60 s while the app is on screen; stop when backgrounded.
             guard scenePhase == .active else { return }
+            await model.applyProvisioningIfPresent()
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(60))
                 if Task.isCancelled { break }
                 await model.refreshAll()
             }
         }
+        #if targetEnvironment(simulator)
+        .task(id: scenePhase) {
+            // Simulator only: notice a drop file from the Mac within a second,
+            // even when the app is already in front. One file stat per second.
+            guard scenePhase == .active else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                if Task.isCancelled { break }
+                await model.applyProvisioningIfPresent()
+            }
+        }
+        #endif
     }
 
     private var settingsButton: some ToolbarContent {

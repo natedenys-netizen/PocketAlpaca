@@ -13,9 +13,9 @@ struct PocketAlpacaApp: App {
     @State private var model: AppModel
 
     init() {
-        // Simulator only: accept settings handed over by Scripts/simulator_provision.py
-        // before the model reads the Keychain. Compiles to nothing on a device.
-        Provisioning.applyFromEnvironmentIfPresent()
+        // Simulator only: a drop file left by Scripts/simulator_provision.py is
+        // applied before the model reads the Keychain. Inert on a device.
+        Provisioning.applyDropFileIfPresent()
         _model = State(initialValue: AppModel())
     }
 

@@ -35,6 +35,9 @@ final class AppModel {
     var lastRefresh: Date?
     var lastError: String?
 
+    /// What the last Mac-side provisioning did (simulator only), for Settings.
+    var provisionNote: String? = Provisioning.lastSummary
+
     /// True while there is no token: the UI shows sample data with a banner.
     var isUsingSampleData: Bool { !hasToken }
 
@@ -77,6 +80,18 @@ final class AppModel {
         rebuildClient()
         clearData()
         Task { await refreshAll() }
+    }
+
+    /// Simulator only: picks up a drop file written while the app is running,
+    /// then re-reads every stored setting. Cheap when there is nothing waiting.
+    func applyProvisioningIfPresent() async {
+        guard Provisioning.dropFileExists, let note = Provisioning.applyDropFileIfPresent() else { return }
+        provisionNote = note
+        environment = TokenStore.environment
+        rebuildClient()
+        clearData()
+        await refreshAll()
+        await loadSignals(force: true)
     }
 
     private func rebuildClient() {

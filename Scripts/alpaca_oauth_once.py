@@ -16,7 +16,8 @@ again:
     python3 Scripts/alpaca_oauth_once.py --env paper      # first, for development
     python3 Scripts/alpaca_oauth_once.py --env live       # later, for the real account
 
-The token itself is never written anywhere; it is printed once.
+The token is saved to this Mac's login Keychain for simulator_provision.py
+(pass --no-save-token to print it once instead).
 
 Register the app first at https://app.alpaca.markets/connect with redirect
 URI exactly:  http://localhost:8765/callback
@@ -52,12 +53,14 @@ def keychain_get(account):
     return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else None
 
 
-def keychain_set(account, value):
-    """Create or replace one value in the macOS login Keychain."""
-    r = subprocess.run(["security", "add-generic-password", "-U", "-s", KEYCHAIN_SERVICE, "-a", account, "-w", value],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        sys.exit(f"Keychain write failed for {account}: {r.stderr.strip()}")
+def keychain_set(account, value, service=None):
+    """Create or replace one value in the macOS login Keychain. The value goes to
+    `security` on stdin as hex, never on a command line."""
+    svc = service or KEYCHAIN_SERVICE
+    cmd = f"add-generic-password -U -s {svc} -a {account} -X {value.encode().hex()}\n"
+    r = subprocess.run(["security", "-i"], input=cmd, capture_output=True, text=True, timeout=30)
+    if r.returncode != 0 or "error" in (r.stderr or "").lower():
+        sys.exit(f"Keychain write failed for {svc}/{account}: {(r.stderr or r.stdout).strip()}")
 
 
 def kill_stale_instances():
@@ -90,10 +93,7 @@ def show_client_id():
 
 def keychain_set_token(env, token):
     """Keep the token in the login Keychain so simulator_provision.py can hand it to the simulator."""
-    r = subprocess.run(["security", "add-generic-password", "-U", "-s", "PocketAlpaca-Tokens", "-a", env, "-w", token],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        print(f"  (could not save the token to the Keychain: {r.stderr.strip()})")
+    keychain_set(env, token, service="PocketAlpaca-Tokens")
 
 
 def store_credentials():
@@ -223,15 +223,16 @@ def main():
         sys.exit(f"No access_token in response: {tok}")
 
     print("\n" + "=" * 64)
-    print(f"  {args.env.upper()} account token (scope: '{tok.get('scope', '') or 'read-only'}')")
+    print(f"  {args.env.upper()} account token received (scope: '{tok.get('scope', '') or 'read-only'}', {len(access)} characters)")
     print("=" * 64)
-    print("\n  " + access + "\n")
     if not args.no_save_token:
         keychain_set_token(args.env, access)
-        print(f"  Saved to this Mac's Keychain ('PocketAlpaca-Tokens' / {args.env}). To hand it to the simulator app:")
+        print(f"\n  Saved to this Mac's Keychain ('PocketAlpaca-Tokens' / {args.env}); not shown here.")
+        print("  To hand it to the simulator app:")
         print(f"    python3 Scripts/simulator_provision.py apply --env {args.env}")
-        print("  On a real phone, paste it into PocketAlpaca → Settings → Sign in instead.")
+        print("  For a real phone, run again with --no-save-token to see it once and paste it into Settings.")
     else:
+        print("\n  " + access + "\n")
         print("  Paste it into PocketAlpaca → Settings → Sign in, with the")
         print(f"  Environment switch set to {args.env.capitalize()}. Then clear this terminal.")
     print("  Revoke it any time at app.alpaca.markets → Connected Apps.\n")

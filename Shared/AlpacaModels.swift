@@ -217,7 +217,7 @@ struct PortfolioHistory: Codable, Hashable {
     /// and would flatten the whole chart, so leading non-positive points are dropped.
     var points: [Point] {
         let all = zip(timestamp, equity).compactMap { ts, eq -> Point? in
-            guard let eq else { return nil }
+            guard let eq, eq.isFinite else { return nil }
             return Point(id: ts, date: Date(timeIntervalSince1970: TimeInterval(ts)), equity: eq)
         }
         guard let first = all.firstIndex(where: { $0.equity > 0 }) else { return [] }
