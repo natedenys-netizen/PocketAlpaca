@@ -14,6 +14,7 @@ struct PositionDetailView: View {
         NavigationStack {
             List {
                 Section { header }
+                    .listRowBackground(LedgerHeat.rowBackground(fraction: live.unrealizedPlpc.value))
 
                 Section("Profit / loss") {
                     plRow("Since entry", live.unrealizedPl.value, live.unrealizedPlpc.value)

@@ -38,3 +38,30 @@ extension Color {
         return v > 0 ? .green : .red
     }
 }
+
+/// Row heat, ported from the Live Position Ledger's ptLedgerHeatColor_:
+/// neutral at flat, linearly stronger green/red with the size of the move,
+/// fully saturated at ±3% (where this account's stops sit). Endpoint colours
+/// are Google Sheets' own scale values, chosen to keep text readable.
+enum LedgerHeat {
+    static let capPercent = 3.0
+    static let green = Color(red: 87 / 255, green: 187 / 255, blue: 138 / 255)   // #57BB8A
+    static let red = Color(red: 230 / 255, green: 124 / 255, blue: 115 / 255)    // #E67C73
+
+    /// `fraction` is Alpaca's unrealized_plpc (0.0137 = +1.37%). Returns the
+    /// endpoint colour and a 0...1 strength, or nil when flat/unknown.
+    static func heat(fraction: Double?) -> (color: Color, strength: Double)? {
+        guard let f = fraction, f.isFinite, f != 0 else { return nil }
+        let pct = f * 100
+        return (pct > 0 ? green : red, min(abs(pct) / capPercent, 1))
+    }
+
+    /// A row background for List rows: the endpoint colour over the system
+    /// row background, so it works in light and dark mode alike.
+    static func rowBackground(fraction: Double?) -> some View {
+        ZStack {
+            Color(.secondarySystemGroupedBackground)
+            if let h = heat(fraction: fraction) { h.color.opacity(0.08 + 0.52 * h.strength) }
+        }
+    }
+}

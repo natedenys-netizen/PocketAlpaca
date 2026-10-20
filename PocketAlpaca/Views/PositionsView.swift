@@ -55,6 +55,7 @@ struct PositionsView: View {
                         ForEach(positions) { position in
                             Button { selected = position } label: { PositionRow(position: position) }
                                 .buttonStyle(.plain)
+                                .listRowBackground(LedgerHeat.rowBackground(fraction: position.unrealizedPlpc.value))
                         }
                     }
                 }
