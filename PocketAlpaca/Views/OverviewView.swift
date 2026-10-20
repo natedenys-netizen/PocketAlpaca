@@ -14,6 +14,7 @@ struct OverviewView: View {
                     equityHeader
                     chartCard
                     statsGrid
+                    ScorecardCard()
                 }
                 .padding()
             }

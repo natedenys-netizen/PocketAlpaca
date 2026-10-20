@@ -215,6 +215,57 @@ struct LedgerSection: Codable, Hashable {
     let rows: [LedgerRow]
 }
 
+/// Aggregate results for a group of closed trades (an engine, a direction, a tier, or everything).
+struct TradeStats: Codable, Hashable, Identifiable {
+    var engine: String?
+    var direction: String?
+    var tier: String?
+    var unknowable: Bool?
+    let n: Int
+    let wins: Int
+    let losses: Int
+    let winRate: Double?
+    let totalPnl: Double
+    let avgPnl: Double?
+    let medianPnl: Double?
+    let avgReturn: Double?
+    let best: Double?
+    let worst: Double?
+    let concentration: Double?
+    let avgMfePct: Double?
+    let avgMaePct: Double?
+    var directions: [TradeStats]? = nil
+    var tiers: [TradeStats]? = nil
+
+    var id: String { [engine, direction, tier].compactMap { $0 }.joined(separator: "|") + "#\(n)" }
+}
+
+typealias EngineStats = TradeStats
+extension TradeStats {
+    var engineName: String { engine ?? "?" }
+}
+
+struct ScoreWindowStats: Codable, Hashable {
+    let from: String?
+    let to: String?
+    let total: TradeStats
+    let engines: [TradeStats]
+}
+
+struct ScorecardWindows: Codable, Hashable {
+    let recent: ScoreWindowStats?
+    let all: ScoreWindowStats?
+}
+
+struct ScorecardSection: Codable, Hashable {
+    let days: Int?
+    let trustFrom: String?
+    let openTrades: Int?
+    let mismatches: Int?
+    let error: String?
+    let windows: ScorecardWindows
+}
+
 struct SignalsPayload: Codable, Hashable {
     let ok: Bool
     let error: String?
@@ -224,6 +275,7 @@ struct SignalsPayload: Codable, Hashable {
     let cloudTiers: CloudTiersSection?
     let earnings: EarningsSection?
     let ledger: LedgerSection?
+    let scorecard: ScorecardSection?
 }
 
 enum SignalsError: LocalizedError {
@@ -270,7 +322,8 @@ struct SignalsClient: Sendable {
                             .init(name: "tiers", value: tiers.joined(separator: ",")),
                             .init(name: "maxPrice", value: String(Int(filter.maxPrice))),
                             .init(name: "earningsDays", value: String(filter.earningsDays)),
-                            .init(name: "ledger", value: "1")]
+                            .init(name: "ledger", value: "1"),
+                            .init(name: "scorecard", value: "1")]
         var req = URLRequest(url: comps.url!)
         req.timeoutInterval = 30
         let (data, response): (Data, URLResponse)
