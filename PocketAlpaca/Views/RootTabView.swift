@@ -43,6 +43,8 @@ struct RootTabView: View {
             .tabItem { Label("Signals", systemImage: "antenna.radiowaves.left.and.right") }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
+        .preferredColorScheme(model.appearance.colorScheme)
+        .tint(model.theme.primary)
         .task { await model.refreshAll() }
         .task(id: scenePhase) {
             // Refresh every 60 s while the app is on screen; stop when backgrounded.

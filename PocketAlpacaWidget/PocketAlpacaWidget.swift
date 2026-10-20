@@ -121,7 +121,7 @@ struct PocketAlpacaWidgetEntryView: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            Image(systemName: "chart.line.uptrend.xyaxis").foregroundStyle(.green)
+            Image(systemName: "chart.line.uptrend.xyaxis").foregroundStyle(TokenStore.theme.id == Theme.default.id ? Color.green : TokenStore.theme.primary)
             Text("Equity").font(.caption).foregroundStyle(.secondary)
             Spacer()
             Text(entry.environment.label.uppercased())

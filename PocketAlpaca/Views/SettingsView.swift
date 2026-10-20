@@ -80,10 +80,27 @@ struct SettingsView: View {
                     Text("The engines' candidate lists (Cloud Tiers and Earnings Watch) come from a read-only web endpoint in your Apps Script account. The URL is the deployment's /exec address; the key is printed once by setupSignalsApiKey().")
                 }
 
+                Section("Appearance") {
+                    @Bindable var model = model
+                    Picker("Mode", selection: $model.appearance) {
+                        ForEach(Appearance.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    NavigationLink {
+                        TeamColorsView()
+                    } label: {
+                        HStack {
+                            Text("Team colors")
+                            Spacer()
+                            ThemeSwatch(theme: model.theme)
+                            Text(model.theme.name).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                    }
+                }
+
                 Section("About") {
                     LabeledContent("Access", value: "Read-only")
                     LabeledContent("Data", value: "Alpaca Trading API")
-                    LabeledContent("Appearance", value: "Follows system")
                 }
             }
             .navigationTitle("Settings")
@@ -95,6 +112,48 @@ struct SettingsView: View {
                 Button("Disconnect", role: .destructive) { model.clearSignals(); signalsURLInput = "" }
             }
         }
+    }
+}
+
+/// Pick a two-colour palette. Applied as the app tint and the Overview stripe.
+struct TeamColorsView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        List {
+            ForEach(Theme.groups, id: \.self) { group in
+                Section(group) {
+                    ForEach(Theme.all.filter { $0.group == group }) { theme in
+                        Button { model.theme = theme } label: {
+                            HStack(spacing: 12) {
+                                ThemeSwatch(theme: theme)
+                                Text(theme.name).foregroundStyle(.primary)
+                                Spacer()
+                                if theme.id == model.theme.id {
+                                    Image(systemName: "checkmark").foregroundStyle(theme.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Team colors")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct ThemeSwatch: View {
+    let theme: Theme
+    var body: some View {
+        HStack(spacing: 0) {
+            Rectangle().fill(theme.primary)
+            Rectangle().fill(theme.secondary)
+        }
+        .frame(width: 28, height: 18)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.quaternary))
+        .accessibilityHidden(true)
     }
 }
 

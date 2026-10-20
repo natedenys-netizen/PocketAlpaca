@@ -44,6 +44,9 @@ struct OverviewView: View {
                     .foregroundStyle(clock.isOpen ? Color.green : Color.secondary)
                     .padding(.top, 2)
             }
+            if model.theme.id != Theme.default.id {
+                TeamStripe(theme: model.theme).padding(.top, 6)
+            }
         }
     }
 

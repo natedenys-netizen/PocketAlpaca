@@ -38,6 +38,13 @@ final class AppModel {
     /// What the last Mac-side provisioning did (simulator only), for Settings.
     var provisionNote: String? = Provisioning.lastSummary
 
+    var appearance: Appearance = TokenStore.appearance {
+        didSet { TokenStore.appearance = appearance }
+    }
+    var theme: Theme = TokenStore.theme {
+        didSet { TokenStore.theme = theme; WidgetCenter.shared.reloadAllTimelines() }
+    }
+
     /// True while there is no token: the UI shows sample data with a banner.
     var isUsingSampleData: Bool { !hasToken }
 

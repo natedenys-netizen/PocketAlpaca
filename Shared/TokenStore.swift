@@ -58,6 +58,21 @@ enum TokenStore {
 
     static func deleteSignalsKey() { remove(account: signalsKeyAccount) }
 
+    // MARK: - Look
+
+    private static let appearanceKey = "appearance"
+    private static let themeKey = "theme-id"
+
+    static var appearance: Appearance {
+        get { Appearance(rawValue: sharedDefaults.string(forKey: appearanceKey) ?? "") ?? .system }
+        set { sharedDefaults.set(newValue.rawValue, forKey: appearanceKey) }
+    }
+
+    static var theme: Theme {
+        get { Theme.named(sharedDefaults.string(forKey: themeKey)) }
+        set { sharedDefaults.set(newValue.id, forKey: themeKey) }
+    }
+
     private static let signalsFilterKey = "signals-filter"
     static var signalsFilter: SignalsFilter {
         get {
