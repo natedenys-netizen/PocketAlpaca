@@ -55,6 +55,7 @@ struct SignalsView: View {
                             ForEach(SignalsFilter.TierSort.allCases) { Text($0.label).tag($0) }
                         }
                     }
+                    Toggle("Only candidates an engine refused", isOn: $model.signalsFilter.refusedOnly)
                     if model.signalsFilter.view != .cloud {
                         Picker("Earnings window · \(model.signalsFilter.daysLabel)", selection: $model.signalsFilter.earningsDays) {
                             ForEach(SignalsFilter.dayChoices, id: \.self) { d in
@@ -121,9 +122,21 @@ struct SignalsView: View {
 
             Section { filterSummary }
 
+            if let ref = model.signals?.refusals {
+                Section {
+                    refusalSummary("Cloud engine (2a)", ref.core)
+                    refusalSummary("Earnings sleeve", ref.ecs)
+                } header: {
+                    Text("Refused in the last \(ref.days ?? 3) days")
+                } footer: {
+                    Text("From the engines' own refusal ledgers: the stage that stopped each candidate. A cap stage means the setup passed every quality gate and only a position limit said no.")
+                }
+            }
+
             if model.signalsFilter.view != .earnings, let cloud = model.signals?.cloudTiers {
-                let longs = sortedCloud(cloud.rows.filter { !$0.isShort && matches($0.symbol) })
-                let shorts = sortedCloud(cloud.rows.filter { $0.isShort && matches($0.symbol) })
+                let refusedOnly = model.signalsFilter.refusedOnly
+                let longs = sortedCloud(cloud.rows.filter { !$0.isShort && matches($0.symbol) && (!refusedOnly || model.coreRefusal(symbol: $0.symbol, side: $0.side) != nil) })
+                let shorts = sortedCloud(cloud.rows.filter { $0.isShort && matches($0.symbol) && (!refusedOnly || model.coreRefusal(symbol: $0.symbol, side: $0.side) != nil) })
                 let scope = "of \(cloud.totalRows ?? cloud.rows.count) on the sheet"
                 if !longs.isEmpty || model.signalsFilter.tiers.contains(where: { $0.hasPrefix("T") }) {
                     Section {
@@ -144,7 +157,8 @@ struct SignalsView: View {
             }
 
             if model.signalsFilter.view != .cloud, let earn = model.signals?.earnings {
-                let visible = earn.rows.filter { matches($0.symbol) && (!model.signalsFilter.callsOnly || !($0.reactionCall ?? "").isEmpty) }
+                let visible = earn.rows.filter { matches($0.symbol) && (!model.signalsFilter.callsOnly || !($0.reactionCall ?? "").isEmpty)
+                                                 && (!model.signalsFilter.refusedOnly || model.ecsRefusal(symbol: $0.symbol) != nil) }
                 let groups = Dictionary(grouping: visible) { $0.section ?? "OTHER" }
                 let scope = "\(model.signalsFilter.daysLabel.lowercased()) of \(earn.totalRows ?? earn.rows.count)"
                 ForEach(Array(["BULLISH", "BEARISH", "NEUTRAL", "OTHER"].enumerated()), id: \.element) { i, key in
@@ -210,6 +224,7 @@ struct SignalsView: View {
                     HStack(spacing: 6) {
                         Text(row.symbol).font(.headline)
                         if let p = heldPosition(row.symbol) { HeldChip(position: p) }
+                        else if let r = model.coreRefusal(symbol: row.symbol, side: row.side) { RefusalPill(row: r) }
                     }
                     Text(cloudDetail(row))
                         .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
@@ -244,6 +259,7 @@ struct SignalsView: View {
                 HStack(spacing: 6) {
                     Text(row.symbol).font(.headline)
                     if let p = heldPosition(row.symbol) { HeldChip(position: p) }
+                    else if let r = model.ecsRefusal(symbol: row.symbol) { RefusalPill(row: r) }
                     Spacer()
                     Text(earningsWhen(row)).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                 }
@@ -260,6 +276,28 @@ struct SignalsView: View {
             .padding(.vertical, 2)
         }
         .buttonStyle(.plain)
+    }
+
+    private func refusalSummary(_ title: String, _ g: RefusalGroup) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title).font(.subheadline.weight(.medium))
+                Spacer()
+                Text("\(g.count) refusal\(g.count == 1 ? "" : "s")").font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            if g.count > 0 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(g.topStages.prefix(6), id: \.stage) { st in
+                            Pill(text: "\(RefusalPill.label(st.stage)) \(st.count)", tint: RefusalPill.tint(st.stage))
+                        }
+                    }
+                }
+            } else {
+                Text("Nothing refused in the window").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
     }
 
     private func earningsWhen(_ row: EarningsRow) -> String {
@@ -294,6 +332,23 @@ struct TierBadge: View {
         case 3: return 0.14
         default: return 0.09
         }
+    }
+}
+
+/// "refused: cap" — the engine's own stage name, lightly humanised.
+struct RefusalPill: View {
+    let row: RefusalRow
+    var body: some View {
+        Pill(text: "refused: \(Self.label(row.stage))", tint: Self.tint(row.stage))
+    }
+    static func label(_ stage: String) -> String {
+        stage.replacingOccurrences(of: "_", with: " ").lowercased()
+    }
+    static func tint(_ stage: String) -> Color {
+        let s = stage.lowercased()
+        if s.contains("cap") || s.contains("slot") { return .orange }      // quality passed; a limit said no
+        if s.contains("bias") { return .purple }
+        return .secondary
     }
 }
 

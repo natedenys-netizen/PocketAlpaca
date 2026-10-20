@@ -144,6 +144,7 @@ struct SignalsFilter: Codable, Hashable {
     var tierSort: TierSort = .tier
     var earningsDays: Int = 7         // 0 = all
     var callsOnly: Bool = false       // earnings rows with a Reaction Call only
+    var refusedOnly: Bool = false     // only candidates an engine recently refused
 
     /// Tier labels in canonical order, for the request and the header.
     var orderedTiers: [String] { Self.allTiers.filter { tiers.contains($0) } }
@@ -266,6 +267,35 @@ struct ScorecardSection: Codable, Hashable {
     let windows: ScorecardWindows
 }
 
+/// One refused candidate from an engine's refusal ledger.
+struct RefusalRow: Codable, Hashable, Identifiable {
+    let symbol: String
+    let stage: String
+    let date: String?
+    let direction: String?
+    let score: Double?
+    let run: String?
+    var id: String { symbol + "|" + (direction ?? "") + "|" + (date ?? "") }
+}
+
+struct RefusalGroup: Codable, Hashable {
+    let count: Int
+    let byStage: [String: Int]
+    let rows: [RefusalRow]
+
+    /// Stages by frequency, most common first.
+    var topStages: [(stage: String, count: Int)] {
+        byStage.map { ($0.key, $0.value) }.sorted { $0.1 > $1.1 }
+    }
+}
+
+struct RefusalsSection: Codable, Hashable {
+    let days: Int?
+    let from: String?
+    let core: RefusalGroup
+    let ecs: RefusalGroup
+}
+
 struct SignalsPayload: Codable, Hashable {
     let ok: Bool
     let error: String?
@@ -276,6 +306,7 @@ struct SignalsPayload: Codable, Hashable {
     let earnings: EarningsSection?
     let ledger: LedgerSection?
     let scorecard: ScorecardSection?
+    let refusals: RefusalsSection?
 }
 
 enum SignalsError: LocalizedError {
@@ -323,7 +354,8 @@ struct SignalsClient: Sendable {
                             .init(name: "maxPrice", value: String(Int(filter.maxPrice))),
                             .init(name: "earningsDays", value: String(filter.earningsDays)),
                             .init(name: "ledger", value: "1"),
-                            .init(name: "scorecard", value: "1")]
+                            .init(name: "scorecard", value: "1"),
+                            .init(name: "refusals", value: "1")]
         var req = URLRequest(url: comps.url!)
         req.timeoutInterval = 30
         let (data, response): (Data, URLResponse)

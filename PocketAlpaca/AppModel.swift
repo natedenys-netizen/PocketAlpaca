@@ -212,6 +212,19 @@ final class AppModel {
         signals?.ledger?.rows.first { $0.symbol == symbol.uppercased() }
     }
 
+    /// 2a's latest refusal of a cloud candidate (matched on symbol, and direction when recorded).
+    func coreRefusal(symbol: String, side: String) -> RefusalRow? {
+        guard let rows = signals?.refusals?.core.rows else { return nil }
+        let sym = symbol.uppercased()
+        return rows.first { $0.symbol == sym && ($0.direction == nil || $0.direction == side.uppercased()) }
+            ?? rows.first { $0.symbol == sym }
+    }
+
+    /// The earnings sleeve's latest refusal of an earnings candidate.
+    func ecsRefusal(symbol: String) -> RefusalRow? {
+        signals?.refusals?.ecs.rows.first { $0.symbol == symbol.uppercased() }
+    }
+
     /// Held positions the ledger flags as unprotected or without a stop.
     var unprotectedPositions: [Position] {
         positions.filter { p in
