@@ -156,6 +156,65 @@ struct SignalsFilter: Codable, Hashable {
     var daysLabel: String { earningsDays == 0 ? "All dates" : "Next \(earningsDays) days" }
 }
 
+/// One row of 2a's Live Position Ledger: the engines' own view of an open
+/// position. Columns are keyed by camel-cased header; the endpoint adds
+/// `unprotected` and `noStop` flags derived from the stop text.
+struct LedgerRow: Codable, Hashable, Identifiable {
+    let fields: [String: Flex]
+
+    init(from decoder: Decoder) throws {
+        fields = try decoder.singleValueContainer().decode([String: Flex].self)
+    }
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        try c.encode(fields)
+    }
+
+    private func s(_ key: String) -> String? {
+        guard let f = fields[key], !f.isEmpty else { return nil }
+        return f.text
+    }
+
+    var symbol: String { s("symbol") ?? "?" }
+    var id: String { symbol + ":" + (s("direction") ?? "") }
+    var direction: String? { s("direction") }
+    var engine: String? { s("engine") }
+    var stopText: String? { s("stopPrice") }
+    var stopPct: Double? { fields["stop"]?.number ?? fields["stopPercent"]?.number }
+    var tier1: String? { s("takeProfitTier1") }
+    var tier2: String? { s("takeProfitTier2") }
+    var daysHeld: Double? { fields["daysHeld"]?.number }
+    var lastUpdated: String? { s("lastUpdatedET") ?? s("lastUpdated") }
+    var unprotected: Bool { fields["unprotected"]?.text.lowercased() == "yes" || fields["unprotected"]?.number == 1 }
+    var noStop: Bool { fields["noStop"]?.text.lowercased() == "yes" || fields["noStop"]?.number == 1 }
+
+    /// Short engine tag for a chip: "Core", "ECS", "Aligned", "CYRX", "Split"…
+    var engineTag: String? {
+        guard let e = engine else { return nil }
+        let lower = e.lowercased()
+        if lower.contains("earnings confluence") { return "ECS" }
+        if lower.contains("aligned") { return "Aligned" }
+        if lower.contains("cyrx") { return "CYRX" }
+        if lower.contains("core split") { return "Split" }
+        if lower.contains("core") { return "Core" }
+        return e.components(separatedBy: " ").prefix(2).joined(separator: " ")
+    }
+
+    /// A one-line stop description: "trailing 5.50%" / "$71.33" / "no stop".
+    var stopSummary: String {
+        guard let t = stopText, !t.isEmpty else { return "no stop" }
+        if let r = t.range(of: #"trailing\s+[0-9.]+%"#, options: .regularExpression) { return String(t[r]) }
+        if let r = t.range(of: #"\$?[0-9]+\.[0-9]{2}"#, options: .regularExpression) { return "stop " + String(t[r]).replacingOccurrences(of: "$", with: "") }
+        return String(t.prefix(28))
+    }
+}
+
+struct LedgerSection: Codable, Hashable {
+    let totalRows: Int?
+    let columns: [String]
+    let rows: [LedgerRow]
+}
+
 struct SignalsPayload: Codable, Hashable {
     let ok: Bool
     let error: String?
@@ -164,6 +223,7 @@ struct SignalsPayload: Codable, Hashable {
     let timeZone: String?
     let cloudTiers: CloudTiersSection?
     let earnings: EarningsSection?
+    let ledger: LedgerSection?
 }
 
 enum SignalsError: LocalizedError {
@@ -209,7 +269,8 @@ struct SignalsClient: Sendable {
                             .init(name: "section", value: filter.view.section),
                             .init(name: "tiers", value: tiers.joined(separator: ",")),
                             .init(name: "maxPrice", value: String(Int(filter.maxPrice))),
-                            .init(name: "earningsDays", value: String(filter.earningsDays))]
+                            .init(name: "earningsDays", value: String(filter.earningsDays)),
+                            .init(name: "ledger", value: "1")]
         var req = URLRequest(url: comps.url!)
         req.timeoutInterval = 30
         let (data, response): (Data, URLResponse)

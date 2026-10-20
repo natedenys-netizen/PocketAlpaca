@@ -140,6 +140,7 @@ final class AppModel {
             lastError = nil
             lastRefresh = Date()
             WidgetCenter.shared.reloadAllTimelines()
+            if signalsConfigured { await loadSignals() }   // ledger + candidates, cached 2 min
         } catch {
             lastError = (error as? AlpacaError)?.errorDescription ?? error.localizedDescription
         }
@@ -205,6 +206,19 @@ final class AppModel {
 
     /// Recent fills for one symbol, newest first.
     func fills(for symbol: String) -> [Fill] { fills.filter { $0.symbol == symbol } }
+
+    /// The engines' ledger row for a held symbol, when the Signals endpoint is set up.
+    func ledgerRow(for symbol: String) -> LedgerRow? {
+        signals?.ledger?.rows.first { $0.symbol == symbol.uppercased() }
+    }
+
+    /// Held positions the ledger flags as unprotected or without a stop.
+    var unprotectedPositions: [Position] {
+        positions.filter { p in
+            guard let row = ledgerRow(for: p.symbol) else { return false }
+            return row.unprotected || row.noStop
+        }
+    }
 
     var totalUnrealizedPl: Double { positions.compactMap { $0.unrealizedPl.value }.reduce(0, +) }
     var winners: Int { positions.filter { ($0.unrealizedPl.value ?? 0) > 0 }.count }

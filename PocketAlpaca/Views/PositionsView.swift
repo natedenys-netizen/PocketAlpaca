@@ -46,6 +46,7 @@ struct PositionsView: View {
                 Section {
                     summaryRow
                     exposureRow
+                    protectionRow
                 }
                 Section(header: Text("\(model.positions.count) position\(model.positions.count == 1 ? "" : "s") · \(sort.label)")) {
                     if model.positions.isEmpty && !model.isRefreshing {
@@ -53,9 +54,11 @@ struct PositionsView: View {
                                                description: Text("Positions appear here as soon as the account holds any."))
                     } else {
                         ForEach(positions) { position in
-                            Button { selected = position } label: { PositionRow(position: position) }
-                                .buttonStyle(.plain)
-                                .listRowBackground(LedgerHeat.rowBackground(fraction: position.unrealizedPlpc.value))
+                            Button { selected = position } label: {
+                                PositionRow(position: position, ledger: model.ledgerRow(for: position.symbol))
+                            }
+                            .buttonStyle(.plain)
+                            .listRowBackground(LedgerHeat.rowBackground(fraction: position.unrealizedPlpc.value))
                         }
                     }
                 }
@@ -88,6 +91,25 @@ struct PositionsView: View {
     private var shortValue: Double {
         model.account?.shortMarketValue.value
             ?? model.positions.filter { $0.isShort }.compactMap { $0.marketValue.value }.reduce(0, +)
+    }
+
+    /// From the engines' ledger: how many held positions have no stop or only
+    /// partial coverage. Hidden until the Signals endpoint is connected.
+    @ViewBuilder private var protectionRow: some View {
+        if model.signals?.ledger != nil {
+            let bad = model.unprotectedPositions
+            if bad.isEmpty {
+                Label("Every position has a stop covering all shares", systemImage: "checkmark.shield")
+                    .font(.footnote).foregroundStyle(.secondary)
+            } else {
+                Label("\(bad.count) position\(bad.count == 1 ? "" : "s") not fully protected: \(bad.map(\.symbol).joined(separator: ", "))",
+                      systemImage: "exclamationmark.shield.fill")
+                    .font(.footnote.weight(.semibold)).foregroundStyle(.red)
+            }
+        } else if model.signalsConfigured == false {
+            Label("Connect Signals in Settings to see each position's engine and stop", systemImage: "antenna.radiowaves.left.and.right")
+                .font(.footnote).foregroundStyle(.secondary)
+        }
     }
 
     private var exposureRow: some View {
@@ -143,9 +165,16 @@ struct PositionsView: View {
 
 struct PositionRow: View {
     let position: Position
+    var ledger: LedgerRow? = nil
+
+    private var atRisk: Bool { ledger.map { $0.unprotected || $0.noStop } ?? false }
 
     var body: some View {
         HStack(alignment: .top) {
+            if atRisk {
+                RoundedRectangle(cornerRadius: 2).fill(Color.red).frame(width: 4)
+                    .accessibilityLabel("Not fully protected")
+            }
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
                     Text(position.symbol).font(.headline)
@@ -154,10 +183,26 @@ struct PositionRow: View {
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(position.isShort ? Color.red.opacity(0.15) : Color.green.opacity(0.15), in: Capsule())
                         .foregroundStyle(position.isShort ? .red : .green)
+                    if let tag = ledger?.engineTag {
+                        Text(tag).font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(Color.secondary.opacity(0.15), in: Capsule())
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Text("\(Fmt.qty(position.signedQty)) sh  ·  avg \(Fmt.price(position.avgEntryPrice.value))  →  \(Fmt.price(position.currentPrice.value))")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+                if let l = ledger {
+                    HStack(spacing: 6) {
+                        Image(systemName: atRisk ? "exclamationmark.shield.fill" : "shield")
+                        Text(l.stopSummary)
+                        if let d = l.daysHeld { Text("· \(Int(d))d held") }
+                        if l.unprotected { Text("· shares unprotected").fontWeight(.semibold) }
+                    }
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(atRisk ? Color.red : Color.secondary)
+                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 3) {

@@ -34,6 +34,25 @@ struct PositionDetailView: View {
                     LabeledContent("Cost basis", value: Fmt.money(live.costBasis.value))
                 }
 
+                if let l = model.ledgerRow(for: live.symbol) {
+                    Section("Engine ledger") {
+                        if let e = l.engine { LabeledContent("Engine", value: e) }
+                        if let t = l.stopText {
+                            LabeledContent("Stop") {
+                                Text(t).multilineTextAlignment(.trailing).font(.footnote)
+                                    .foregroundStyle(l.unprotected ? Color.red : Color.primary)
+                            }
+                        } else {
+                            LabeledContent("Stop") { Text("none").foregroundStyle(.red) }
+                        }
+                        if let p = l.stopPct { LabeledContent("Stop distance", value: "\(p.formatted(.number.precision(.fractionLength(0...2))))%") }
+                        if let t1 = l.tier1 { LabeledContent("Take-profit tier 1") { Text(t1).multilineTextAlignment(.trailing).font(.footnote) } }
+                        if let t2 = l.tier2 { LabeledContent("Take-profit tier 2") { Text(t2).multilineTextAlignment(.trailing).font(.footnote) } }
+                        if let d = l.daysHeld { LabeledContent("Days held", value: "\(Int(d))") }
+                        if let u = l.lastUpdated { LabeledContent("Ledger updated", value: u) }
+                    }
+                }
+
                 let orders = model.openOrders(for: live.symbol)
                 Section(orders.isEmpty ? "No open orders" : "Open orders") {
                     if orders.isEmpty {
