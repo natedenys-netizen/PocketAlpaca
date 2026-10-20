@@ -59,8 +59,20 @@ struct SettingsView: View {
                         .disabled(URL(string: signalsURLInput.trimmingCharacters(in: .whitespacesAndNewlines)) == nil
                                   || (!model.signalsConfigured && signalsKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                     if model.signalsConfigured {
-                        LabeledContent("Status", value: model.signalsError == nil ? (model.signals == nil ? "Saved" : "Connected") : "Error")
+                        LabeledContent("Status") {
+                            if let err = model.signalsError {
+                                Text(err).foregroundStyle(.red).multilineTextAlignment(.trailing).font(.footnote)
+                            } else if let s = model.signals, let c = s.cloudTiers {
+                                Text("Connected · \(c.rows.count) tiers · \(s.earnings?.rows.count ?? 0) earnings")
+                            } else {
+                                Text("Saved")
+                            }
+                        }
+                        Button("Test signals now") { Task { await model.loadSignals(force: true) } }
                         Button("Disconnect signals", role: .destructive) { confirmClearSignals = true }
+                    }
+                    if let note = Provisioning.lastSummary {
+                        Label(note, systemImage: "laptopcomputer.and.iphone").font(.footnote).foregroundStyle(.secondary)
                     }
                 } header: {
                     Text("Signals")

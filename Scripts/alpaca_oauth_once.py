@@ -88,6 +88,14 @@ def show_client_id():
     print("Compare the Client ID above with the one on your app's page at app.alpaca.markets/connect.")
 
 
+def keychain_set_token(env, token):
+    """Keep the token in the login Keychain so simulator_provision.py can hand it to the simulator."""
+    r = subprocess.run(["security", "add-generic-password", "-U", "-s", "PocketAlpaca-Tokens", "-a", env, "-w", token],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"  (could not save the token to the Keychain: {r.stderr.strip()})")
+
+
 def store_credentials():
     print("Paste each value from your password manager and press Enter. Nothing is echoed.")
     cid = getpass.getpass("Connect app Client ID: ").strip()
@@ -124,6 +132,7 @@ def main():
     ap.add_argument("--env", choices=["paper", "live"], help="which account to authorize")
     ap.add_argument("--scope", default="", help="OAuth scopes; empty = read-only (default). 'data' adds Market Data API.")
     ap.add_argument("--store", action="store_true", help="save the Client ID and Secret in the macOS Keychain, then exit")
+    ap.add_argument("--no-save-token", action="store_true", help="do not keep the resulting token in the macOS Keychain for simulator_provision.py")
     ap.add_argument("--show", action="store_true", help="print the stored Client ID and the authorize URL (never the secret), then exit")
     args = ap.parse_args()
 
@@ -217,8 +226,14 @@ def main():
     print(f"  {args.env.upper()} account token (scope: '{tok.get('scope', '') or 'read-only'}')")
     print("=" * 64)
     print("\n  " + access + "\n")
-    print("  Paste it into PocketAlpaca → Settings → Sign in, with the")
-    print(f"  Environment switch set to {args.env.capitalize()}. Then clear this terminal.")
+    if not args.no_save_token:
+        keychain_set_token(args.env, access)
+        print(f"  Saved to this Mac's Keychain ('PocketAlpaca-Tokens' / {args.env}). To hand it to the simulator app:")
+        print(f"    python3 Scripts/simulator_provision.py apply --env {args.env}")
+        print("  On a real phone, paste it into PocketAlpaca → Settings → Sign in instead.")
+    else:
+        print("  Paste it into PocketAlpaca → Settings → Sign in, with the")
+        print(f"  Environment switch set to {args.env.capitalize()}. Then clear this terminal.")
     print("  Revoke it any time at app.alpaca.markets → Connected Apps.\n")
 
 
