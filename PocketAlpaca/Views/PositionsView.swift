@@ -23,7 +23,7 @@ struct PositionsView: View {
             .listStyle(.insetGrouped)
             .refreshable { await model.refreshAll() }
         }
-        .overlay(alignment: .bottom) { refreshStamp }
+        .safeAreaInset(edge: .bottom) { refreshStamp }
     }
 
     private var summaryRow: some View {
@@ -44,6 +44,7 @@ struct PositionsView: View {
         .padding(.vertical, 4)
     }
 
+    /// Sits in the bottom safe-area inset, so the list scrolls above it instead of under it.
     private var refreshStamp: some View {
         Group {
             if let t = model.lastRefresh {
@@ -51,7 +52,7 @@ struct PositionsView: View {
                     .font(.caption2).foregroundStyle(.secondary)
                     .padding(.horizontal, 10).padding(.vertical, 4)
                     .background(.thinMaterial, in: Capsule())
-                    .padding(.bottom, 6)
+                    .padding(.vertical, 4)
             }
         }
     }
