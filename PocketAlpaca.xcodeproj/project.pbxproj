@@ -6,6 +6,12 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A0DA832730871E64005AE61C /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A0DA832630871E64005AE61C /* WidgetKit.framework */; };
+		A0DA832930871E64005AE61C /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A0DA832830871E64005AE61C /* SwiftUI.framework */; };
+		A0DA833830871E69005AE61C /* PocketAlpacaWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A0DA832430871E64005AE61C /* PocketAlpacaWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		A009A6E83080399C008E88FA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,13 +27,47 @@
 			remoteGlobalIDString = A009A6D930803997008E88FA;
 			remoteInfo = PocketAlpaca;
 		};
+		A0DA833630871E69005AE61C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A009A6D230803997008E88FA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A0DA832330871E64005AE61C;
+			remoteInfo = PocketAlpacaWidgetExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A0DA833D30871E69005AE61C /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A0DA833830871E69005AE61C /* PocketAlpacaWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A009A6DA30803997008E88FA /* PocketAlpaca.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PocketAlpaca.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A009A6E73080399B008E88FA /* PocketAlpacaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PocketAlpacaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A009A6F13080399C008E88FA /* PocketAlpacaUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PocketAlpacaUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A0DA832430871E64005AE61C /* PocketAlpacaWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PocketAlpacaWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A0DA832630871E64005AE61C /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		A0DA832830871E64005AE61C /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A0DA833930871E69005AE61C /* Exceptions for "PocketAlpacaWidget" folder in "PocketAlpacaWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A0DA832330871E64005AE61C /* PocketAlpacaWidgetExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A009A6DC30803997008E88FA /* PocketAlpaca */ = {
@@ -43,6 +83,19 @@
 		A009A6F43080399C008E88FA /* PocketAlpacaUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = PocketAlpacaUITests;
+			sourceTree = "<group>";
+		};
+		A0C0FFEE5A1D0000000001AB /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		A0DA832A30871E64005AE61C /* PocketAlpacaWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A0DA833930871E69005AE61C /* Exceptions for "PocketAlpacaWidget" folder in "PocketAlpacaWidgetExtension" target */,
+			);
+			path = PocketAlpacaWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -69,6 +122,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A0DA832130871E64005AE61C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0DA832930871E64005AE61C /* SwiftUI.framework in Frameworks */,
+				A0DA832730871E64005AE61C /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -78,6 +140,9 @@
 				A009A6DC30803997008E88FA /* PocketAlpaca */,
 				A009A6EA3080399C008E88FA /* PocketAlpacaTests */,
 				A009A6F43080399C008E88FA /* PocketAlpacaUITests */,
+				A0DA832A30871E64005AE61C /* PocketAlpacaWidget */,
+				A0C0FFEE5A1D0000000001AB /* Shared */,
+				A0DA832530871E64005AE61C /* Frameworks */,
 				A009A6DB30803997008E88FA /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,8 +153,18 @@
 				A009A6DA30803997008E88FA /* PocketAlpaca.app */,
 				A009A6E73080399B008E88FA /* PocketAlpacaTests.xctest */,
 				A009A6F13080399C008E88FA /* PocketAlpacaUITests.xctest */,
+				A0DA832430871E64005AE61C /* PocketAlpacaWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A0DA832530871E64005AE61C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				A0DA832630871E64005AE61C /* WidgetKit.framework */,
+				A0DA832830871E64005AE61C /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -102,13 +177,16 @@
 				A009A6D630803997008E88FA /* Sources */,
 				A009A6D730803997008E88FA /* Frameworks */,
 				A009A6D830803997008E88FA /* Resources */,
+				A0DA833D30871E69005AE61C /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A0DA833730871E69005AE61C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A009A6DC30803997008E88FA /* PocketAlpaca */,
+				A0C0FFEE5A1D0000000001AB /* Shared */,
 			);
 			name = PocketAlpaca;
 			packageProductDependencies = (
@@ -163,6 +241,29 @@
 			productReference = A009A6F13080399C008E88FA /* PocketAlpacaUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		A0DA832330871E64005AE61C /* PocketAlpacaWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A0DA833A30871E69005AE61C /* Build configuration list for PBXNativeTarget "PocketAlpacaWidgetExtension" */;
+			buildPhases = (
+				A0DA832030871E64005AE61C /* Sources */,
+				A0DA832130871E64005AE61C /* Frameworks */,
+				A0DA832230871E64005AE61C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A0DA832A30871E64005AE61C /* PocketAlpacaWidget */,
+				A0C0FFEE5A1D0000000001AB /* Shared */,
+			);
+			name = PocketAlpacaWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = PocketAlpacaWidgetExtension;
+			productReference = A0DA832430871E64005AE61C /* PocketAlpacaWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -184,6 +285,9 @@
 						CreatedOnToolsVersion = 16.4;
 						TestTargetID = A009A6D930803997008E88FA;
 					};
+					A0DA832330871E64005AE61C = {
+						CreatedOnToolsVersion = 16.4;
+					};
 				};
 			};
 			buildConfigurationList = A009A6D530803997008E88FA /* Build configuration list for PBXProject "PocketAlpaca" */;
@@ -203,6 +307,7 @@
 				A009A6D930803997008E88FA /* PocketAlpaca */,
 				A009A6E63080399B008E88FA /* PocketAlpacaTests */,
 				A009A6F03080399C008E88FA /* PocketAlpacaUITests */,
+				A0DA832330871E64005AE61C /* PocketAlpacaWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -223,6 +328,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A009A6EF3080399C008E88FA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A0DA832230871E64005AE61C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,6 +365,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A0DA832030871E64005AE61C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +384,11 @@
 			isa = PBXTargetDependency;
 			target = A009A6D930803997008E88FA /* PocketAlpaca */;
 			targetProxy = A009A6F23080399C008E88FA /* PBXContainerItemProxy */;
+		};
+		A0DA833730871E69005AE61C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A0DA832330871E64005AE61C /* PocketAlpacaWidgetExtension */;
+			targetProxy = A0DA833630871E69005AE61C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -407,6 +531,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				CODE_SIGN_ENTITLEMENTS = PocketAlpaca/PocketAlpaca.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = com.natedenys.PocketAlpaca;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -434,6 +559,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				CODE_SIGN_ENTITLEMENTS = PocketAlpaca/PocketAlpaca.entitlements;
 				PRODUCT_BUNDLE_IDENTIFIER = com.natedenys.PocketAlpaca;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -510,6 +636,60 @@
 			};
 			name = Release;
 		};
+		A0DA833B30871E69005AE61C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PocketAlpacaWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PocketAlpacaWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				CODE_SIGN_ENTITLEMENTS = PocketAlpacaWidget/PocketAlpacaWidget.entitlements;
+				PRODUCT_BUNDLE_IDENTIFIER = com.natedenys.PocketAlpaca.PocketAlpacaWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A0DA833C30871E69005AE61C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PocketAlpacaWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PocketAlpacaWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				CODE_SIGN_ENTITLEMENTS = PocketAlpacaWidget/PocketAlpacaWidget.entitlements;
+				PRODUCT_BUNDLE_IDENTIFIER = com.natedenys.PocketAlpaca.PocketAlpacaWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -545,6 +725,15 @@
 			buildConfigurations = (
 				A009A7023080399C008E88FA /* Debug */,
 				A009A7033080399C008E88FA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A0DA833A30871E69005AE61C /* Build configuration list for PBXNativeTarget "PocketAlpacaWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A0DA833B30871E69005AE61C /* Debug */,
+				A0DA833C30871E69005AE61C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

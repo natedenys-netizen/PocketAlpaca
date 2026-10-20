@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WidgetKit
 
 /// One source of truth for the whole app: which client to use, the latest
 /// account/positions/orders, and any error to show. Refreshes on demand and
@@ -67,6 +68,7 @@ final class AppModel {
     }
 
     private func rebuildClient() {
+        WidgetCenter.shared.reloadAllTimelines()
         if let token = TokenStore.load(for: environment) {
             client = LiveAlpacaClient(environment: environment, token: token)
             hasToken = true
@@ -103,6 +105,7 @@ final class AppModel {
             fills = fl.sorted { $0.transactionTime > $1.transactionTime }
             lastError = nil
             lastRefresh = Date()
+            WidgetCenter.shared.reloadAllTimelines()
         } catch {
             lastError = (error as? AlpacaError)?.errorDescription ?? error.localizedDescription
         }
