@@ -33,6 +33,7 @@ enum PositionSort: String, CaseIterable, Identifiable {
 struct PositionsView: View {
     @Environment(AppModel.self) private var model
     @AppStorage("positionsSort") private var sortRaw = PositionSort.symbol.rawValue
+    @State private var selected: Position?
 
     private var sort: PositionSort { PositionSort(rawValue: sortRaw) ?? .symbol }
     private var positions: [Position] { sort.sorted(model.positions) }
@@ -51,7 +52,10 @@ struct PositionsView: View {
                         ContentUnavailableView("No open positions", systemImage: "briefcase",
                                                description: Text("Positions appear here as soon as the account holds any."))
                     } else {
-                        ForEach(positions) { PositionRow(position: $0) }
+                        ForEach(positions) { position in
+                            Button { selected = position } label: { PositionRow(position: position) }
+                                .buttonStyle(.plain)
+                        }
                     }
                 }
             }
@@ -59,6 +63,7 @@ struct PositionsView: View {
             .refreshable { await model.refreshAll() }
         }
         .safeAreaInset(edge: .bottom) { refreshStamp }
+        .sheet(item: $selected) { PositionDetailView(position: $0) }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Menu {

@@ -16,6 +16,7 @@ final class AppModel {
     var recentOrders: [Order] = []
     var history: [ChartRange: PortfolioHistory] = [:]
     var clock: MarketClock?
+    var fills: [Fill] = []
 
     var isRefreshing = false
     var lastRefresh: Date?
@@ -76,7 +77,7 @@ final class AppModel {
     }
 
     private func clearData() {
-        account = nil; positions = []; openOrders = []; recentOrders = []; history = [:]; clock = nil
+        account = nil; positions = []; openOrders = []; recentOrders = []; history = [:]; clock = nil; fills = []
         lastError = nil; lastRefresh = nil
     }
 
@@ -92,12 +93,14 @@ final class AppModel {
             async let o = client.orders(open: true, limit: 50)
             async let r = client.orders(open: false, limit: 30)
             async let c = client.clock()
-            let (acct, pos, open, recent, clk) = try await (a, p, o, r, c)
+            async let f = client.fills(limit: 100)
+            let (acct, pos, open, recent, clk, fl) = try await (a, p, o, r, c, f)
             account = acct
             positions = pos.sorted { $0.symbol < $1.symbol }
             openOrders = open
             recentOrders = recent
             clock = clk
+            fills = fl.sorted { $0.transactionTime > $1.transactionTime }
             lastError = nil
             lastRefresh = Date()
         } catch {
@@ -124,6 +127,12 @@ final class AppModel {
     func currentPrice(for symbol: String) -> Double? {
         positions.first { $0.symbol == symbol }?.currentPrice.value
     }
+
+    /// Open orders (usually the protective stop) for one symbol.
+    func openOrders(for symbol: String) -> [Order] { openOrders.filter { $0.symbol == symbol } }
+
+    /// Recent fills for one symbol, newest first.
+    func fills(for symbol: String) -> [Fill] { fills.filter { $0.symbol == symbol } }
 
     var totalUnrealizedPl: Double { positions.compactMap { $0.unrealizedPl.value }.reduce(0, +) }
     var winners: Int { positions.filter { ($0.unrealizedPl.value ?? 0) > 0 }.count }

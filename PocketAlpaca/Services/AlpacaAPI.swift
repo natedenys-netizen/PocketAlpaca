@@ -24,6 +24,7 @@ protocol AlpacaClient: Sendable {
     func orders(open: Bool, limit: Int) async throws -> [Order]
     func portfolioHistory(_ range: ChartRange, accountCreated: Date?) async throws -> PortfolioHistory
     func clock() async throws -> MarketClock
+    func fills(limit: Int) async throws -> [Fill]
 }
 
 /// Read-only client. Every call is GET; nothing here can place or change an order.
@@ -92,6 +93,13 @@ struct LiveAlpacaClient: AlpacaClient {
     }
 
     func clock() async throws -> MarketClock { try await get("clock") }
+
+    func fills(limit: Int = 100) async throws -> [Fill] {
+        try await get("account/activities/FILL", [
+            .init(name: "page_size", value: String(min(max(limit, 1), 100))),
+            .init(name: "direction", value: "desc"),
+        ])
+    }
 }
 
 /// Sample data for Xcode previews and for the simulator before a token exists.
@@ -147,5 +155,20 @@ struct MockAlpacaClient: AlpacaClient {
     func clock() async throws -> MarketClock {
         let now = Date()
         return MarketClock(timestamp: now, isOpen: false, nextOpen: now.addingTimeInterval(14 * 3600), nextClose: now.addingTimeInterval(20.5 * 3600))
+    }
+
+    func fills(limit: Int) async throws -> [Fill] {
+        let now = Date()
+        func f(_ id: String, _ ago: TimeInterval, _ sym: String, _ side: String, _ qty: Double, _ px: Double) -> Fill {
+            Fill(id: id, activityType: "FILL", transactionTime: now.addingTimeInterval(-ago), type: "fill",
+                 price: .init(px), qty: .init(qty), side: side, symbol: sym, leavesQty: .init(0), orderId: nil, cumQty: .init(qty))
+        }
+        return [
+            f("f1", 2 * 3600, "MSBI", "buy", 7, 33.15),
+            f("f2", 3 * 3600, "AMCR", "sell_short", 5, 42.29),
+            f("f3", 26 * 3600, "CM", "sell_short", 2, 112.76),
+            f("f4", 27 * 3600, "GSG", "sell", 10, 21.40),
+            f("f5", 3 * 86400, "GSG", "buy", 10, 21.05),
+        ]
     }
 }

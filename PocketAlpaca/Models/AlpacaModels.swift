@@ -276,3 +276,41 @@ struct MarketClock: Codable, Hashable {
         return isOpen ? "Market open · closes \(when(nextClose))" : "Market closed · opens \(when(nextOpen))"
     }
 }
+
+/// One execution from GET /v2/account/activities/FILL.
+struct Fill: Codable, Hashable, Identifiable {
+    let id: String
+    let activityType: String?
+    let transactionTime: Date
+    let type: String            // "fill" or "partial_fill"
+    let price: StringDouble
+    let qty: StringDouble
+    let side: String            // "buy", "sell", "sell_short"
+    let symbol: String
+    let leavesQty: StringDouble
+    let orderId: String?
+    let cumQty: StringDouble
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, price, qty, side, symbol
+        case activityType = "activity_type"
+        case transactionTime = "transaction_time"
+        case leavesQty = "leaves_qty"
+        case orderId = "order_id"
+        case cumQty = "cum_qty"
+    }
+
+    var isBuy: Bool { side.lowercased() == "buy" }
+    var sideLabel: String {
+        switch side.lowercased() {
+        case "buy": return "BUY"
+        case "sell_short": return "SHORT"
+        default: return "SELL"
+        }
+    }
+    var notional: Double? {
+        guard let p = price.value, let q = qty.value else { return nil }
+        return p * q
+    }
+    var isPartial: Bool { type.lowercased() == "partial_fill" }
+}

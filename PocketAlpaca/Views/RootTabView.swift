@@ -27,6 +27,13 @@ struct RootTabView: View {
                     .toolbar { settingsButton }
             }
             .tabItem { Label("Orders", systemImage: "arrow.left.arrow.right") }
+
+            NavigationStack {
+                FillsView()
+                    .navigationTitle("Fills")
+                    .toolbar { settingsButton }
+            }
+            .tabItem { Label("Fills", systemImage: "clock.arrow.circlepath") }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .task { await model.refreshAll() }
