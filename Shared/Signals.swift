@@ -54,6 +54,8 @@ struct CloudTierRow: Codable, Hashable, Identifiable {
 struct CloudTiersSection: Codable, Hashable {
     let scanDate: String?
     let scanTime: String?
+    let totalRows: Int?         // rows on the sheet before the tier filter
+    let maxTier: Int?
     let rows: [CloudTierRow]
 }
 
@@ -104,7 +106,21 @@ struct EarningsRow: Codable, Hashable, Identifiable {
 
 struct EarningsSection: Codable, Hashable {
     let columns: [String]
+    let totalRows: Int?         // rows on the sheet before the date window
+    let days: Int?
     let rows: [EarningsRow]
+}
+
+/// What the Signals tab asks the endpoint to trim to. Persisted by the model.
+struct SignalsFilter: Codable, Hashable {
+    var maxTier: Int = 2         // 1...4; 4 = everything
+    var earningsDays: Int = 7    // 0 = everything
+
+    static let tierChoices = [1, 2, 3, 4]
+    static let dayChoices = [7, 14, 30, 0]
+
+    var tierLabel: String { maxTier >= 4 ? "All tiers" : (maxTier == 1 ? "Tier 1 only" : "Tiers 1–\(maxTier)") }
+    var daysLabel: String { earningsDays == 0 ? "All dates" : "Next \(earningsDays) days" }
 }
 
 struct SignalsPayload: Codable, Hashable {
@@ -153,9 +169,11 @@ struct SignalsClient: Sendable {
         return d
     }()
 
-    func fetch(section: String = "all") async throws -> SignalsPayload {
+    func fetch(section: String = "all", filter: SignalsFilter = SignalsFilter()) async throws -> SignalsPayload {
         var comps = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)!
-        comps.queryItems = [.init(name: "key", value: key), .init(name: "section", value: section)]
+        comps.queryItems = [.init(name: "key", value: key), .init(name: "section", value: section),
+                            .init(name: "maxTier", value: String(filter.maxTier)),
+                            .init(name: "earningsDays", value: String(filter.earningsDays))]
         var req = URLRequest(url: comps.url!)
         req.timeoutInterval = 30
         let (data, response): (Data, URLResponse)

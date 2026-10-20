@@ -58,6 +58,16 @@ enum TokenStore {
 
     static func deleteSignalsKey() { remove(account: signalsKeyAccount) }
 
+    private static let signalsFilterKey = "signals-filter"
+    static var signalsFilter: SignalsFilter {
+        get {
+            guard let data = sharedDefaults.data(forKey: signalsFilterKey),
+                  let f = try? JSONDecoder().decode(SignalsFilter.self, from: data) else { return SignalsFilter() }
+            return f
+        }
+        set { sharedDefaults.set(try? JSONEncoder().encode(newValue), forKey: signalsFilterKey) }
+    }
+
     // MARK: - Keychain primitives
 
     // Items are stored in the shared access group. If that is unavailable (no

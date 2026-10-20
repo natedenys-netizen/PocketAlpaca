@@ -23,6 +23,13 @@ final class AppModel {
     var signals: SignalsPayload?
     var signalsError: String?
     var signalsLoadedAt: Date?
+    var signalsFilter: SignalsFilter = TokenStore.signalsFilter {
+        didSet {
+            guard signalsFilter != oldValue else { return }
+            TokenStore.signalsFilter = signalsFilter
+            Task { await loadSignals(force: true) }
+        }
+    }
 
     var isRefreshing = false
     var lastRefresh: Date?
@@ -156,7 +163,7 @@ final class AppModel {
         }
         if !force, let t = signalsLoadedAt, Date().timeIntervalSince(t) < 120, signals != nil { return }
         do {
-            signals = try await SignalsClient(endpoint: url, key: key).fetch()
+            signals = try await SignalsClient(endpoint: url, key: key).fetch(filter: signalsFilter)
             signalsError = nil
             signalsLoadedAt = Date()
         } catch {

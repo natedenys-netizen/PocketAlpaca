@@ -6,6 +6,7 @@ struct SignalsView: View {
     @Environment(AppModel.self) private var model
     @State private var showSettings = false
     @State private var selectedPosition: Position?
+    @State private var search = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,7 +25,33 @@ struct SignalsView: View {
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
         .sheet(item: $selectedPosition) { PositionDetailView(position: $0) }
+        .searchable(text: $search, prompt: "Symbol")
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                @Bindable var model = model
+                Menu {
+                    Picker("Cloud tiers", selection: $model.signalsFilter.maxTier) {
+                        ForEach(SignalsFilter.tierChoices, id: \.self) { n in
+                            Text(n >= 4 ? "All tiers" : (n == 1 ? "Tier 1 only" : "Tiers 1–\(n)")).tag(n)
+                        }
+                    }
+                    Picker("Earnings window", selection: $model.signalsFilter.earningsDays) {
+                        ForEach(SignalsFilter.dayChoices, id: \.self) { d in
+                            Text(d == 0 ? "All dates" : "Next \(d) days").tag(d)
+                        }
+                    }
+                } label: {
+                    Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("Filter signals")
+            }
+        }
         .task { await model.loadSignals() }
+    }
+
+    private func matches(_ symbol: String) -> Bool {
+        let q = search.trimmingCharacters(in: .whitespaces).uppercased()
+        return q.isEmpty || symbol.uppercased().contains(q)
     }
 
     private var list: some View {
@@ -36,13 +63,14 @@ struct SignalsView: View {
             }
 
             if let cloud = model.signals?.cloudTiers {
-                let longs = cloud.rows.filter { !$0.isShort }.sorted { $0.rank < $1.rank }
-                let shorts = cloud.rows.filter { $0.isShort }.sorted { $0.rank < $1.rank }
+                let longs = cloud.rows.filter { !$0.isShort && matches($0.symbol) }.sorted { $0.rank < $1.rank }
+                let shorts = cloud.rows.filter { $0.isShort && matches($0.symbol) }.sorted { $0.rank < $1.rank }
+                let scope = "\(model.signalsFilter.tierLabel.lowercased()) of \(cloud.totalRows ?? cloud.rows.count)"
                 Section {
                     if longs.isEmpty { Text("No long candidates").foregroundStyle(.secondary) }
                     ForEach(longs) { row in cloudRow(row) }
                 } header: {
-                    header("Cloud Tiers · Long", count: longs.count, detail: scanStamp(cloud))
+                    header("Cloud Tiers · Long", count: longs.count, detail: [scanStamp(cloud), scope].compactMap { $0 }.joined(separator: " · "))
                 }
                 Section {
                     if shorts.isEmpty { Text("No short candidates").foregroundStyle(.secondary) }
@@ -53,17 +81,22 @@ struct SignalsView: View {
             }
 
             if let earn = model.signals?.earnings {
-                let groups = Dictionary(grouping: earn.rows) { $0.section ?? "OTHER" }
-                ForEach(["BULLISH", "BEARISH", "NEUTRAL", "OTHER"], id: \.self) { key in
+                let visible = earn.rows.filter { matches($0.symbol) }
+                let groups = Dictionary(grouping: visible) { $0.section ?? "OTHER" }
+                let scope = "\(model.signalsFilter.daysLabel.lowercased()) of \(earn.totalRows ?? earn.rows.count)"
+                ForEach(Array(["BULLISH", "BEARISH", "NEUTRAL", "OTHER"].enumerated()), id: \.element) { i, key in
                     if let rows = groups[key], !rows.isEmpty {
                         Section {
                             ForEach(rows.sorted { ($0.earningsDate ?? .distantFuture) < ($1.earningsDate ?? .distantFuture) }) { row in
                                 earningsRow(row)
                             }
                         } header: {
-                            header("Earnings · \(key.capitalized)", count: rows.count, detail: nil)
+                            header("Earnings · \(key.capitalized)", count: rows.count, detail: i == 0 || groups.keys.sorted().first == key ? scope : nil)
                         }
                     }
+                }
+                if visible.isEmpty {
+                    Section { Text("No earnings candidates in this window").foregroundStyle(.secondary) } header: { header("Earnings", count: 0, detail: scope) }
                 }
             }
 
