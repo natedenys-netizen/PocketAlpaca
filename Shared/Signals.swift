@@ -54,8 +54,9 @@ struct CloudTierRow: Codable, Hashable, Identifiable {
 struct CloudTiersSection: Codable, Hashable {
     let scanDate: String?
     let scanTime: String?
-    let totalRows: Int?         // rows on the sheet before the tier filter
-    let maxTier: Int?
+    let totalRows: Int?         // rows on the sheet before any trimming
+    let tiers: [String]?
+    let maxPrice: Double?
     let rows: [CloudTierRow]
 }
 
@@ -111,15 +112,47 @@ struct EarningsSection: Codable, Hashable {
     let rows: [EarningsRow]
 }
 
-/// What the Signals tab asks the endpoint to trim to. Persisted by the model.
+/// What the Signals tab shows and asks the endpoint to trim to. Persisted
+/// by the model so the choice sticks between launches.
 struct SignalsFilter: Codable, Hashable {
-    var maxTier: Int = 2         // 1...4; 4 = everything
-    var earningsDays: Int = 7    // 0 = everything
+    enum View: String, Codable, CaseIterable, Identifiable {
+        case cloud, earnings, both
+        var id: String { rawValue }
+        var label: String { self == .cloud ? "Cloud Tiers" : (self == .earnings ? "Earnings" : "Both") }
+        var section: String { self == .both ? "all" : rawValue }
+    }
+    enum TierSort: String, Codable, CaseIterable, Identifiable {
+        case tier, rvol, ichi, price
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .tier: return "Tier"
+            case .rvol: return "RVOL, highest first"
+            case .ichi: return "Ichi score, highest first"
+            case .price: return "Price, lowest first"
+            }
+        }
+    }
 
-    static let tierChoices = [1, 2, 3, 4]
+    static let allTiers = ["T1", "T2", "T3", "T4", "S1", "S2", "S3", "S4"]
+    static let priceChoices: [Double] = [0, 25, 50, 100, 250]
     static let dayChoices = [7, 14, 30, 0]
 
-    var tierLabel: String { maxTier >= 4 ? "All tiers" : (maxTier == 1 ? "Tier 1 only" : "Tiers 1–\(maxTier)") }
+    var view: View = .cloud
+    var tiers: Set<String> = ["T1", "T2", "S1", "S2"]
+    var maxPrice: Double = 0          // 0 = any
+    var tierSort: TierSort = .tier
+    var earningsDays: Int = 7         // 0 = all
+    var callsOnly: Bool = false       // earnings rows with a Reaction Call only
+
+    /// Tier labels in canonical order, for the request and the header.
+    var orderedTiers: [String] { Self.allTiers.filter { tiers.contains($0) } }
+
+    var tierLabel: String {
+        if tiers.count == Self.allTiers.count || tiers.isEmpty { return "All tiers" }
+        return orderedTiers.joined(separator: " ")
+    }
+    var priceLabel: String { maxPrice > 0 ? "≤ $\(Int(maxPrice))" : "Any price" }
     var daysLabel: String { earningsDays == 0 ? "All dates" : "Next \(earningsDays) days" }
 }
 
@@ -169,10 +202,13 @@ struct SignalsClient: Sendable {
         return d
     }()
 
-    func fetch(section: String = "all", filter: SignalsFilter = SignalsFilter()) async throws -> SignalsPayload {
+    func fetch(filter: SignalsFilter = SignalsFilter()) async throws -> SignalsPayload {
         var comps = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)!
-        comps.queryItems = [.init(name: "key", value: key), .init(name: "section", value: section),
-                            .init(name: "maxTier", value: String(filter.maxTier)),
+        let tiers = filter.tiers.isEmpty ? SignalsFilter.allTiers : filter.orderedTiers
+        comps.queryItems = [.init(name: "key", value: key),
+                            .init(name: "section", value: filter.view.section),
+                            .init(name: "tiers", value: tiers.joined(separator: ",")),
+                            .init(name: "maxPrice", value: String(Int(filter.maxPrice))),
                             .init(name: "earningsDays", value: String(filter.earningsDays))]
         var req = URLRequest(url: comps.url!)
         req.timeoutInterval = 30

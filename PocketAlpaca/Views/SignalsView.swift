@@ -30,15 +30,38 @@ struct SignalsView: View {
             ToolbarItem(placement: .topBarLeading) {
                 @Bindable var model = model
                 Menu {
-                    Picker("Cloud tiers", selection: $model.signalsFilter.maxTier) {
-                        ForEach(SignalsFilter.tierChoices, id: \.self) { n in
-                            Text(n >= 4 ? "All tiers" : (n == 1 ? "Tier 1 only" : "Tiers 1–\(n)")).tag(n)
+                    Picker("Show", selection: $model.signalsFilter.view) {
+                        ForEach(SignalsFilter.View.allCases) { Text($0.label).tag($0) }
+                    }
+                    if model.signalsFilter.view != .earnings {
+                        Menu("Tiers · \(model.signalsFilter.tierLabel)") {
+                            ForEach(SignalsFilter.allTiers, id: \.self) { t in
+                                Toggle(t, isOn: Binding(
+                                    get: { model.signalsFilter.tiers.contains(t) },
+                                    set: { on in if on { model.signalsFilter.tiers.insert(t) } else { model.signalsFilter.tiers.remove(t) } }))
+                            }
+                            Divider()
+                            Button("Longs only") { model.signalsFilter.tiers = ["T1", "T2", "T3", "T4"] }
+                            Button("Shorts only") { model.signalsFilter.tiers = ["S1", "S2", "S3", "S4"] }
+                            Button("Top tiers (T1 T2 S1 S2)") { model.signalsFilter.tiers = ["T1", "T2", "S1", "S2"] }
+                            Button("All tiers") { model.signalsFilter.tiers = Set(SignalsFilter.allTiers) }
+                        }
+                        Picker("Max price · \(model.signalsFilter.priceLabel)", selection: $model.signalsFilter.maxPrice) {
+                            ForEach(SignalsFilter.priceChoices, id: \.self) { p in
+                                Text(p == 0 ? "Any price" : "$\(Int(p)) or less").tag(p)
+                            }
+                        }
+                        Picker("Sort tiers by", selection: $model.signalsFilter.tierSort) {
+                            ForEach(SignalsFilter.TierSort.allCases) { Text($0.label).tag($0) }
                         }
                     }
-                    Picker("Earnings window", selection: $model.signalsFilter.earningsDays) {
-                        ForEach(SignalsFilter.dayChoices, id: \.self) { d in
-                            Text(d == 0 ? "All dates" : "Next \(d) days").tag(d)
+                    if model.signalsFilter.view != .cloud {
+                        Picker("Earnings window · \(model.signalsFilter.daysLabel)", selection: $model.signalsFilter.earningsDays) {
+                            ForEach(SignalsFilter.dayChoices, id: \.self) { d in
+                                Text(d == 0 ? "All dates" : "Next \(d) days").tag(d)
+                            }
                         }
+                        Toggle("Only with a reaction call", isOn: $model.signalsFilter.callsOnly)
                     }
                 } label: {
                     Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
@@ -47,6 +70,40 @@ struct SignalsView: View {
             }
         }
         .task { await model.loadSignals() }
+    }
+
+    /// The active choices, always visible so the list is never a mystery.
+    private var filterSummary: some View {
+        @Bindable var model = model
+        return VStack(alignment: .leading, spacing: 8) {
+            Picker("Show", selection: $model.signalsFilter.view) {
+                ForEach(SignalsFilter.View.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    if model.signalsFilter.view != .earnings {
+                        Pill(text: model.signalsFilter.tierLabel, tint: .blue)
+                        Pill(text: model.signalsFilter.priceLabel, tint: .blue)
+                        if model.signalsFilter.tierSort != .tier { Pill(text: "sort: \(model.signalsFilter.tierSort.label)", tint: .blue) }
+                    }
+                    if model.signalsFilter.view != .cloud {
+                        Pill(text: model.signalsFilter.daysLabel, tint: .purple)
+                        if model.signalsFilter.callsOnly { Pill(text: "calls only", tint: .purple) }
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func sortedCloud(_ rows: [CloudTierRow]) -> [CloudTierRow] {
+        switch model.signalsFilter.tierSort {
+        case .tier:  return rows.sorted { ($0.rank, $0.symbol) < ($1.rank, $1.symbol) }
+        case .rvol:  return rows.sorted { ($0.rvol ?? -1) > ($1.rvol ?? -1) }
+        case .ichi:  return rows.sorted { ($0.ichiScore ?? -1) > ($1.ichiScore ?? -1) }
+        case .price: return rows.sorted { ($0.price ?? .infinity) < ($1.price ?? .infinity) }
+        }
     }
 
     private func matches(_ symbol: String) -> Bool {
@@ -62,26 +119,32 @@ struct SignalsView: View {
                 }
             }
 
-            if let cloud = model.signals?.cloudTiers {
-                let longs = cloud.rows.filter { !$0.isShort && matches($0.symbol) }.sorted { $0.rank < $1.rank }
-                let shorts = cloud.rows.filter { $0.isShort && matches($0.symbol) }.sorted { $0.rank < $1.rank }
-                let scope = "\(model.signalsFilter.tierLabel.lowercased()) of \(cloud.totalRows ?? cloud.rows.count)"
-                Section {
-                    if longs.isEmpty { Text("No long candidates").foregroundStyle(.secondary) }
-                    ForEach(longs) { row in cloudRow(row) }
-                } header: {
-                    header("Cloud Tiers · Long", count: longs.count, detail: [scanStamp(cloud), scope].compactMap { $0 }.joined(separator: " · "))
+            Section { filterSummary }
+
+            if model.signalsFilter.view != .earnings, let cloud = model.signals?.cloudTiers {
+                let longs = sortedCloud(cloud.rows.filter { !$0.isShort && matches($0.symbol) })
+                let shorts = sortedCloud(cloud.rows.filter { $0.isShort && matches($0.symbol) })
+                let scope = "of \(cloud.totalRows ?? cloud.rows.count) on the sheet"
+                if !longs.isEmpty || model.signalsFilter.tiers.contains(where: { $0.hasPrefix("T") }) {
+                    Section {
+                        if longs.isEmpty { Text("No long candidates match").foregroundStyle(.secondary) }
+                        ForEach(longs) { row in cloudRow(row) }
+                    } header: {
+                        header("Long", count: longs.count, detail: [scanStamp(cloud), scope].compactMap { $0 }.joined(separator: " · "))
+                    }
                 }
-                Section {
-                    if shorts.isEmpty { Text("No short candidates").foregroundStyle(.secondary) }
-                    ForEach(shorts) { row in cloudRow(row) }
-                } header: {
-                    header("Cloud Tiers · Short", count: shorts.count, detail: nil)
+                if !shorts.isEmpty || model.signalsFilter.tiers.contains(where: { $0.hasPrefix("S") }) {
+                    Section {
+                        if shorts.isEmpty { Text("No short candidates match").foregroundStyle(.secondary) }
+                        ForEach(shorts) { row in cloudRow(row) }
+                    } header: {
+                        header("Short", count: shorts.count, detail: longs.isEmpty ? [scanStamp(cloud), scope].compactMap { $0 }.joined(separator: " · ") : nil)
+                    }
                 }
             }
 
-            if let earn = model.signals?.earnings {
-                let visible = earn.rows.filter { matches($0.symbol) }
+            if model.signalsFilter.view != .cloud, let earn = model.signals?.earnings {
+                let visible = earn.rows.filter { matches($0.symbol) && (!model.signalsFilter.callsOnly || !($0.reactionCall ?? "").isEmpty) }
                 let groups = Dictionary(grouping: visible) { $0.section ?? "OTHER" }
                 let scope = "\(model.signalsFilter.daysLabel.lowercased()) of \(earn.totalRows ?? earn.rows.count)"
                 ForEach(Array(["BULLISH", "BEARISH", "NEUTRAL", "OTHER"].enumerated()), id: \.element) { i, key in
