@@ -1,18 +1,25 @@
-// Renders the PocketAlpaca app logo as a 256x256 PNG (Alpaca Connect spec).
-// Run:  swift Scripts/make_logo.swift Assets/logo-256.png
+// Renders the PocketAlpaca logo as a square PNG.
+//   swift Scripts/make_logo.swift Assets/logo-256.png 256      (Alpaca Connect logo)
+//   swift Scripts/make_logo.swift PocketAlpaca/Assets.xcassets/AppIcon.appiconset/AppIcon.png 1024   (iOS app icon)
+// The drawing is designed on a 256-pt canvas and scaled; iOS masks its own corners,
+// so the 1024 icon is drawn square-cornered.
 import Foundation
 import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
 
 let out = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "logo-256.png"
-let size = 256
+let px = CommandLine.arguments.count > 2 ? Int(CommandLine.arguments[2]) ?? 256 : 256
+let size = 256                      // design canvas in points
+let isAppIcon = px >= 512           // iOS applies its own corner mask
 let cs = CGColorSpaceCreateDeviceRGB()
-guard let ctx = CGContext(data: nil, width: size, height: size, bitsPerComponent: 8, bytesPerRow: 0,
+guard let ctx = CGContext(data: nil, width: px, height: px, bitsPerComponent: 8, bytesPerRow: 0,
                           space: cs, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { exit(1) }
+ctx.scaleBy(x: CGFloat(px) / CGFloat(size), y: CGFloat(px) / CGFloat(size))
 
-// Background: deep green rounded square.
-let bg = CGPath(roundedRect: CGRect(x: 0, y: 0, width: size, height: size), cornerWidth: 56, cornerHeight: 56, transform: nil)
+// Background: deep green square, rounded only for the standalone logo.
+let radius: CGFloat = isAppIcon ? 0 : 56
+let bg = CGPath(roundedRect: CGRect(x: 0, y: 0, width: size, height: size), cornerWidth: radius, cornerHeight: radius, transform: nil)
 ctx.addPath(bg)
 ctx.setFillColor(CGColor(red: 0.06, green: 0.36, blue: 0.24, alpha: 1))
 ctx.fillPath()
@@ -53,4 +60,4 @@ guard let img = ctx.makeImage(),
 else { exit(2) }
 CGImageDestinationAddImage(dest, img, nil)
 guard CGImageDestinationFinalize(dest) else { exit(3) }
-print("wrote \(out) \(size)x\(size)")
+print("wrote \(out) \(px)x\(px)")

@@ -17,3 +17,6 @@ Scripts/.oauth_state
 
 # macOS
 .DS_Store
+
+# Python
+__pycache__/
