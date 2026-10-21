@@ -10,6 +10,14 @@ struct PlannerView: View {
     /// Detected harmonic points for this symbol (from the Points column), if any.
     var detected: [String: HarmonicPoint] = [:]
     var detectedLabel: String? = nil
+    /// Which side to look for first: true = bullish, false = bearish, nil = whichever is in progress.
+    var preferBullish: Bool? = nil
+
+    enum Source: String, CaseIterable, Identifiable {
+        case bullish, bearish, manual
+        var id: String { rawValue }
+        var label: String { rawValue.capitalized }
+    }
 
     @State private var timeframe: BarTimeframe = .day
     @State private var bars: [Bar] = []
@@ -17,10 +25,20 @@ struct PlannerView: View {
     @State private var error: String?
     @State private var taps: [PricePoint] = []        // A, B, C in order
     @State private var copied = false
+    @State private var source: Source = .bullish
+    @State private var auto: [Bool: HarmonicMath.AutoABCD] = [:]   // keyed by bullish
 
     private var plan: HarmonicMath.ABCDPlan? {
-        guard taps.count == 3 else { return nil }
+        guard taps.count >= 3 else { return nil }
         return HarmonicMath.abcd(a: taps[0].price, b: taps[1].price, c: taps[2].price)
+    }
+
+    private var currentAuto: HarmonicMath.AutoABCD? {
+        switch source {
+        case .bullish: return auto[true]
+        case .bearish: return auto[false]
+        case .manual: return nil
+        }
     }
 
     var body: some View {
@@ -29,6 +47,13 @@ struct PlannerView: View {
                 ForEach(BarTimeframe.allCases) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented).padding(.horizontal)
+            Picker("Source", selection: $source) {
+                ForEach(Source.allCases) { src in
+                    Text(src == .manual ? "Manual" : (auto[src == .bullish] == nil ? "\(src.label) —" : src.label)).tag(src)
+                }
+            }
+            .pickerStyle(.segmented).padding(.horizontal)
+            .onChange(of: source) { _, _ in applySource() }
 
             if let error {
                 ContentUnavailableView { Label("No bars", systemImage: "chart.bar.xaxis") } description: { Text(error) }
@@ -59,6 +84,28 @@ struct PlannerView: View {
             bars = []
             self.error = (error as? MarketDataError)?.errorDescription ?? error.localizedDescription
         }
+        findAutomatically()
+    }
+
+    /// Runs the scanner's pivot rule on the bars and picks the latest ABCD for
+    /// each side, then loads the preferred side into the plan with no tapping.
+    private func findAutomatically() {
+        let pivots = HarmonicMath.findPivots(closes: bars.map(\.c))
+        auto = [true: HarmonicMath.latestABCD(pivots: pivots, bullish: true),
+                false: HarmonicMath.latestABCD(pivots: pivots, bullish: false)].compactMapValues { $0 }
+        // Preferred side if it has a pattern, else whichever side is in progress, else bullish.
+        if let pref = preferBullish, auto[pref] != nil { source = pref ? .bullish : .bearish }
+        else if let inProg = auto.first(where: { $0.value.inProgress })?.key { source = inProg ? .bullish : .bearish }
+        else if auto[true] != nil { source = .bullish }
+        else if auto[false] != nil { source = .bearish }
+        else { source = .manual }
+        applySource()
+    }
+
+    private func applySource() {
+        copied = false
+        if let a = currentAuto { taps = a.points } else if source != .manual { taps = [] }
+        else { taps = [] }
     }
 
     /// Detected points land on the chart only on the daily view, because the
@@ -74,6 +121,7 @@ struct PlannerView: View {
     }
 
     private func addTap(index: Int, price: Double) {
+        if source != .manual { source = .manual; taps = [] }   // a tap means "I'll place them myself"
         guard taps.count < 3, bars.indices.contains(index) else { return }
         // Snap to the bar's high or low, whichever the tap was nearer.
         let bar = bars[index]
@@ -86,12 +134,20 @@ struct PlannerView: View {
     private var planCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(taps.count < 3 ? "Tap \(["A", "B", "C"][taps.count]) on the chart" : "ABCD projection")
-                    .font(.subheadline.weight(.semibold))
+                Text(cardTitle).font(.subheadline.weight(.semibold))
                 Spacer()
-                if !taps.isEmpty {
-                    Button("Clear") { taps.removeAll(); copied = false }.font(.caption)
+                if !taps.isEmpty || source != .manual {
+                    Button("Clear") { source = .manual; taps.removeAll(); copied = false }.font(.caption)
                 }
+            }
+            if let a = currentAuto {
+                Text(a.inProgress
+                     ? "Found automatically from the last pivots: C is the newest swing, D is still ahead."
+                     : "Latest completed \(a.bullish ? "bullish" : "bearish") ABCD on this chart; D already printed at \(Fmt.price(a.d!.price)).")
+                    .font(.caption).foregroundStyle(a.inProgress ? Color.primary : Color.secondary)
+            } else if source != .manual {
+                Text("No \(source.label.lowercased()) ABCD with the detector's shape in the recent pivots. Try the other side, another timeframe, or tap your own A, B, C.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             if let label = detectedLabel, !detectedPoints.isEmpty {
                 Text("Scanner: \(label) · " + detectedPoints.map { "\($0.label) \(Fmt.price($0.price))" }.joined(separator: "  "))
@@ -139,6 +195,11 @@ struct PlannerView: View {
         .padding(.horizontal)
     }
 
+    private var cardTitle: String {
+        if source == .manual { return taps.count < 3 ? "Tap \(["A", "B", "C"][min(taps.count, 2)]) on the chart" : "ABCD projection" }
+        return "\(source.label) ABCD" + (currentAuto.map { $0.inProgress ? " · in progress" : " · completed" } ?? "")
+    }
+
     private func rrText(_ plan: HarmonicMath.ABCDPlan) -> String {
         let risk = abs(plan.entry - plan.stop), reward = abs(plan.target - plan.entry)
         guard risk > 0 else { return "—" }
@@ -147,7 +208,7 @@ struct PlannerView: View {
 
     private func planText(_ plan: HarmonicMath.ABCDPlan) -> String {
         """
-        \(symbol) ABCD \(plan.bullish ? "bullish" : "bearish") (\(timeframe.label))
+        \(symbol) ABCD \(plan.bullish ? "bullish" : "bearish") (\(timeframe.label), \(source == .manual ? "manual" : "auto"))
         \(taps.map { "\($0.label)=\(Fmt.price($0.price))" }.joined(separator: " "))
         D 1.272=\(Fmt.price(plan.dLevels[0].price))  D 1.618=\(Fmt.price(plan.dLevels[1].price))
         Entry \(Fmt.price(plan.entry))  Stop \(Fmt.price(plan.stop))  Target \(Fmt.price(plan.target))  R:R \(rrText(plan))

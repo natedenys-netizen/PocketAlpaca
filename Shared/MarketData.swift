@@ -124,6 +124,94 @@ enum HarmonicMath {
     /// 1.618 are the classic completion levels.
     static let dExtensions: [Double] = [1.272, 1.618]
 
+    struct Pivot: Hashable {
+        enum Kind { case high, low }
+        let kind: Kind
+        let price: Double
+        let index: Int
+    }
+
+    /// Exact port of the scanner's findPivots(closes, 5): a bar is a pivot high
+    /// when its close is the maximum of the 11-bar window centred on it (low:
+    /// the minimum), and an equal-price repeat within one window is skipped as
+    /// the same plateau. Pivots need 5 bars on each side, so the newest 5 bars
+    /// can never be pivots yet.
+    static func findPivots(closes: [Double], window: Int = 5) -> [Pivot] {
+        var pivots: [Pivot] = []
+        guard closes.count > window * 2 else { return pivots }
+        for i in window..<(closes.count - window) {
+            let slice = closes[(i - window)...(i + window)]
+            let centre = closes[i]
+            if centre == slice.max() {
+                if let lastHigh = pivots.last(where: { $0.kind == .high }), lastHigh.price == centre, (i - lastHigh.index) <= window { } else {
+                    pivots.append(Pivot(kind: .high, price: centre, index: i))
+                }
+            }
+            if centre == slice.min() {
+                if let lastLow = pivots.last(where: { $0.kind == .low }), lastLow.price == centre, (i - lastLow.index) <= window { } else {
+                    pivots.append(Pivot(kind: .low, price: centre, index: i))
+                }
+            }
+        }
+        return pivots
+    }
+
+    struct AutoABCD: Hashable {
+        let bullish: Bool
+        let a: Pivot, b: Pivot, c: Pivot
+        let d: Pivot?                 // present when the pattern already completed
+        var inProgress: Bool { d == nil }
+        var points: [PricePoint] {
+            var out = [PricePoint(label: "A", price: a.price, index: a.index),
+                       PricePoint(label: "B", price: b.price, index: b.index),
+                       PricePoint(label: "C", price: c.price, index: c.index)]
+            if let d { out.append(PricePoint(label: "D", price: d.price, index: d.index)) }
+            return out
+        }
+    }
+
+    /// The latest ABCD on the chart for one side, using the scanner's own
+    /// shape rules (BC retraces 35–92% of AB; a completed D extends CD to
+    /// 120–168% of BC). Bullish = A high, B low, C high, D low to buy.
+    /// Prefers an in-progress pattern (C is the newest pivot, D still ahead);
+    /// otherwise returns the most recent completed one.
+    static func latestABCD(pivots: [Pivot], bullish: Bool) -> AutoABCD? {
+        let aKind: Pivot.Kind = bullish ? .high : .low
+        let bKind: Pivot.Kind = bullish ? .low : .high
+        func shapeOK(_ a: Pivot, _ b: Pivot, _ c: Pivot) -> Bool {
+            let ab = abs(a.price - b.price), bc = abs(c.price - b.price)
+            guard ab > 0, bc > 0 else { return false }
+            if bullish { guard b.price < a.price, c.price > b.price else { return false } }
+            else { guard b.price > a.price, c.price < b.price else { return false } }
+            let r = bc / ab
+            return r >= 0.35 && r <= 0.92
+        }
+        // In progress: C is the last pivot.
+        if pivots.count >= 3 {
+            let c = pivots[pivots.count - 1], b = pivots[pivots.count - 2], a = pivots[pivots.count - 3]
+            if a.kind == aKind, b.kind == bKind, c.kind == aKind, shapeOK(a, b, c) {
+                return AutoABCD(bullish: bullish, a: a, b: b, c: c, d: nil)
+            }
+        }
+        // Completed: the newest A,B,C,D with a valid CD extension.
+        if pivots.count >= 4 {
+            var i = pivots.count - 4
+            while i >= 0 {
+                let a = pivots[i], b = pivots[i + 1], c = pivots[i + 2], d = pivots[i + 3]
+                if a.kind == aKind, b.kind == bKind, c.kind == aKind, d.kind == bKind, shapeOK(a, b, c) {
+                    let bc = abs(c.price - b.price), cd = abs(d.price - c.price)
+                    let ratio = cd / bc
+                    let dBeyond = bullish ? d.price < b.price : d.price > b.price
+                    if ratio >= 1.20 && ratio <= 1.68 && dBeyond {
+                        return AutoABCD(bullish: bullish, a: a, b: b, c: c, d: d)
+                    }
+                }
+                i -= 1
+            }
+        }
+        return nil
+    }
+
     struct ABCDPlan: Hashable {
         let bullish: Bool            // A high → B low → C high → D low (buy at D)
         let retraceBC: Double        // BC as a fraction of AB

@@ -14,6 +14,7 @@ struct SignalsView: View {
         let notes: [String]
         var points: [String: HarmonicPoint] = [:]
         var pointsLabel: String? = nil
+        var preferBullish: Bool? = nil
         var id: String { symbol + subtitle }
     }
 
@@ -42,7 +43,7 @@ struct SignalsView: View {
             }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
-        .sheet(item: $chartTarget) { ChartSheet(symbol: $0.symbol, subtitle: $0.subtitle, notes: $0.notes, detectedPoints: $0.points, detectedLabel: $0.pointsLabel) }
+        .sheet(item: $chartTarget) { ChartSheet(symbol: $0.symbol, subtitle: $0.subtitle, notes: $0.notes, detectedPoints: $0.points, detectedLabel: $0.pointsLabel, preferBullish: $0.preferBullish) }
         .searchable(text: $search, prompt: "Symbol")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -276,7 +277,7 @@ struct SignalsView: View {
             chartTarget = ChartTarget(symbol: row.symbol,
                                       subtitle: "\(row.tier) \(row.side.capitalized) · \(row.confluenceCount)/4 aligned · Ichi \(Int(row.ichiScore ?? 0))",
                                       notes: pats.map { "\($0.category.capitalized): \($0.pattern)" + ($0.entryRule.map { " — \($0)" } ?? "") },
-                                      points: hp?.points ?? [:], pointsLabel: hp?.label)
+                                      points: hp?.points ?? [:], pointsLabel: hp?.label, preferBullish: !row.isShort)
         } label: {
             HStack(alignment: .top, spacing: 10) {
                 TierBadge(tier: row.tier, isShort: row.isShort)
@@ -367,7 +368,7 @@ struct SignalsView: View {
             chartTarget = ChartTarget(symbol: r.symbol,
                                       subtitle: "\(r.category.capitalized) · \(r.pattern)" + (r.direction.map { " · \($0.capitalized)" } ?? ""),
                                       notes: [r.description, r.cheatsheetPattern.map { "Cheatsheet: \($0)" }, r.entryRule.map { "Entry: \($0)" }, r.stopRule.map { "Stop: \($0)" }].compactMap { $0 },
-                                      points: r.points, pointsLabel: r.points.isEmpty ? nil : r.pattern)
+                                      points: r.points, pointsLabel: r.points.isEmpty ? nil : r.pattern, preferBullish: r.isBearish ? false : (r.isBullish ? true : nil))
         } label: {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -414,7 +415,8 @@ struct SignalsView: View {
             chartTarget = ChartTarget(symbol: row.symbol,
                                       subtitle: "Earnings " + earningsWhen(row) + (row.section.map { " · \($0.capitalized)" } ?? ""),
                                       notes: [row.take, row.catalystAngle.map { "Catalyst: \($0)" }, row.optionsPlay.map { "Options play: \($0)" }].compactMap { $0 },
-                                      points: hp?.points ?? [:], pointsLabel: hp?.label)
+                                      points: hp?.points ?? [:], pointsLabel: hp?.label,
+                                      preferBullish: row.section == "BEARISH" ? false : (row.section == "BULLISH" ? true : nil))
         } label: {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {

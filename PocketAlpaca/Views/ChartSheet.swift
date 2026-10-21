@@ -15,6 +15,8 @@ struct ChartSheet: View {
     /// Detected harmonic pivots for this symbol (from the scanner's Points column).
     var detectedPoints: [String: HarmonicPoint] = [:]
     var detectedLabel: String? = nil
+    /// Side the row implies (long/bullish = true), so the planner opens on it.
+    var preferBullish: Bool? = nil
 
     @State private var interval: ChartInterval = .daily
     @State private var showPosition = false
@@ -46,7 +48,7 @@ struct ChartSheet: View {
                 .padding(.horizontal).padding(.bottom, 8)
                 if mode == .planner {
                     ScrollView {
-                        PlannerView(symbol: symbol, detected: detectedPoints, detectedLabel: detectedLabel)
+                        PlannerView(symbol: symbol, detected: detectedPoints, detectedLabel: detectedLabel, preferBullish: preferBullish)
                         if !notes.isEmpty {
                             VStack(alignment: .leading, spacing: 6) {
                                 ForEach(notes, id: \.self) { Text($0).font(.footnote).foregroundStyle(.secondary) }
