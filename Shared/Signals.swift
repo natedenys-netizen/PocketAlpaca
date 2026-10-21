@@ -386,6 +386,18 @@ struct PatternRow: Codable, Hashable, Identifiable {
         guard let c = confidence else { return nil }
         return c > 1 ? c / 100 : c
     }
+
+    /// Harmonic pivots from the Points column ({"A":{"price":..,"barsAgo":..},...}).
+    var points: [String: HarmonicPoint] {
+        guard let raw = s("points"), let data = raw.data(using: .utf8),
+              let obj = try? JSONDecoder().decode([String: HarmonicPoint].self, from: data) else { return [:] }
+        return obj
+    }
+}
+
+struct HarmonicPoint: Codable, Hashable {
+    let price: Double
+    let barsAgo: Int?
 }
 
 struct PatternCategoryInfo: Codable, Hashable {

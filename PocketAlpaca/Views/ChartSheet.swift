@@ -12,9 +12,20 @@ struct ChartSheet: View {
     let symbol: String
     var subtitle: String? = nil
     var notes: [String] = []
+    /// Detected harmonic pivots for this symbol (from the scanner's Points column).
+    var detectedPoints: [String: HarmonicPoint] = [:]
+    var detectedLabel: String? = nil
 
     @State private var interval: ChartInterval = .daily
     @State private var showPosition = false
+    @AppStorage("chartMode") private var modeRaw = ChartMode.tradingView.rawValue
+
+    enum ChartMode: String, CaseIterable, Identifiable {
+        case tradingView, planner
+        var id: String { rawValue }
+        var label: String { self == .tradingView ? "TradingView" : "Planner" }
+    }
+    private var mode: ChartMode { ChartMode(rawValue: modeRaw) ?? .tradingView }
 
     enum ChartInterval: String, CaseIterable, Identifiable {
         case daily = "D", hourly = "60", fifteen = "15"
@@ -28,22 +39,40 @@ struct ChartSheet: View {
         NavigationStack {
             VStack(spacing: 0) {
                 header
-                Picker("Timeframe", selection: $interval) {
-                    ForEach(ChartInterval.allCases) { Text($0.label).tag($0) }
+                Picker("Chart", selection: $modeRaw) {
+                    ForEach(ChartMode.allCases) { Text($0.label).tag($0.rawValue) }
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal).padding(.bottom, 8)
-                TradingViewChart(symbol: symbol, interval: interval.rawValue, dark: colorScheme == .dark)
-                    .id("\(symbol)-\(interval.rawValue)-\(colorScheme == .dark)")
-                if !notes.isEmpty {
+                if mode == .planner {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ForEach(notes, id: \.self) { Text($0).font(.footnote).foregroundStyle(.secondary) }
+                        PlannerView(symbol: symbol, detected: detectedPoints, detectedLabel: detectedLabel)
+                        if !notes.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(notes, id: \.self) { Text($0).font(.footnote).foregroundStyle(.secondary) }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
                         }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
                     }
-                    .frame(maxHeight: 150)
+                } else {
+                    Picker("Timeframe", selection: $interval) {
+                        ForEach(ChartInterval.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal).padding(.bottom, 8)
+                    TradingViewChart(symbol: symbol, interval: interval.rawValue, dark: colorScheme == .dark)
+                        .id("\(symbol)-\(interval.rawValue)-\(colorScheme == .dark)")
+                    if !notes.isEmpty {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(notes, id: \.self) { Text($0).font(.footnote).foregroundStyle(.secondary) }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                        }
+                        .frame(maxHeight: 150)
+                    }
                 }
             }
             .navigationTitle(symbol)
@@ -66,7 +95,7 @@ struct ChartSheet: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 if let s = subtitle { Text(s).font(.subheadline).foregroundStyle(.secondary) }
-                Text("Ichimoku cloud overlay · \(interval.label)").font(.caption2).foregroundStyle(.tertiary)
+                Text(mode == .planner ? "Alpaca bars · tap A, B, C to project D" : "Ichimoku cloud overlay · \(interval.label)").font(.caption2).foregroundStyle(.tertiary)
             }
             Spacer()
             if let p = heldPosition {

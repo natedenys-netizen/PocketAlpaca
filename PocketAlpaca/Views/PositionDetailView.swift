@@ -81,7 +81,9 @@ struct PositionDetailView: View {
                 ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } }
             }
             .sheet(isPresented: $showChart) {
-                ChartSheet(symbol: live.symbol, subtitle: "\(live.isShort ? "Short" : "Long") \(Fmt.qty(live.signedQty)) sh · avg \(Fmt.price(live.avgEntryPrice.value))")
+                let hp = model.patterns(for: live.symbol).first { $0.category == "harmonic" && !$0.points.isEmpty }
+                ChartSheet(symbol: live.symbol, subtitle: "\(live.isShort ? "Short" : "Long") \(Fmt.qty(live.signedQty)) sh · avg \(Fmt.price(live.avgEntryPrice.value))",
+                           detectedPoints: hp?.points ?? [:], detectedLabel: hp?.pattern)
             }
         }
     }

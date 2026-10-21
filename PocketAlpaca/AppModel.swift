@@ -159,6 +159,24 @@ final class AppModel {
         }
     }
 
+    // MARK: - Market data (bars for the planner chart)
+
+    private var barsCache: [String: (at: Date, bars: [Bar])] = [:]
+
+    /// Bars from Alpaca via the signed-in token (needs the data scope); sample bars when there is no token.
+    func bars(symbol: String, timeframe: BarTimeframe) async throws -> [Bar] {
+        let key = "\(environment.rawValue):\(symbol.uppercased()):\(timeframe.rawValue)"
+        if let hit = barsCache[key], Date().timeIntervalSince(hit.at) < 300 { return hit.bars }
+        let result: [Bar]
+        if let live = client as? LiveAlpacaClient {
+            result = try await live.bars(symbol: symbol.uppercased(), timeframe: timeframe)
+        } else {
+            result = MockAlpacaClient().bars(symbol: symbol.uppercased(), timeframe: timeframe)
+        }
+        barsCache[key] = (Date(), result)
+        return result
+    }
+
     // MARK: - Signals
 
     var signalsConfigured: Bool { TokenStore.signalsEndpoint != nil && TokenStore.loadSignalsKey() != nil }

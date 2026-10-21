@@ -12,7 +12,18 @@ struct SignalsView: View {
         let symbol: String
         let subtitle: String
         let notes: [String]
+        var points: [String: HarmonicPoint] = [:]
+        var pointsLabel: String? = nil
         var id: String { symbol + subtitle }
+    }
+
+    /// The first harmonic pattern with pivots for a symbol, so any row can show them on the planner.
+    private func harmonicPoints(for symbol: String) -> (points: [String: HarmonicPoint], label: String)? {
+        for r in model.patterns(for: symbol) where r.category == "harmonic" {
+            let pts = r.points
+            if !pts.isEmpty { return (pts, r.pattern) }
+        }
+        return nil
     }
 
     var body: some View {
@@ -31,7 +42,7 @@ struct SignalsView: View {
             }
         }
         .sheet(isPresented: $showSettings) { SettingsView() }
-        .sheet(item: $chartTarget) { ChartSheet(symbol: $0.symbol, subtitle: $0.subtitle, notes: $0.notes) }
+        .sheet(item: $chartTarget) { ChartSheet(symbol: $0.symbol, subtitle: $0.subtitle, notes: $0.notes, detectedPoints: $0.points, detectedLabel: $0.pointsLabel) }
         .searchable(text: $search, prompt: "Symbol")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -261,9 +272,11 @@ struct SignalsView: View {
         let pats = model.patterns(for: row.symbol, side: row.side)
         let full = row.isFullConfluence
         return Button {
+            let hp = harmonicPoints(for: row.symbol)
             chartTarget = ChartTarget(symbol: row.symbol,
                                       subtitle: "\(row.tier) \(row.side.capitalized) · \(row.confluenceCount)/4 aligned · Ichi \(Int(row.ichiScore ?? 0))",
-                                      notes: pats.map { "\($0.category.capitalized): \($0.pattern)" + ($0.entryRule.map { " — \($0)" } ?? "") })
+                                      notes: pats.map { "\($0.category.capitalized): \($0.pattern)" + ($0.entryRule.map { " — \($0)" } ?? "") },
+                                      points: hp?.points ?? [:], pointsLabel: hp?.label)
         } label: {
             HStack(alignment: .top, spacing: 10) {
                 TierBadge(tier: row.tier, isShort: row.isShort)
@@ -353,7 +366,8 @@ struct SignalsView: View {
         return Button {
             chartTarget = ChartTarget(symbol: r.symbol,
                                       subtitle: "\(r.category.capitalized) · \(r.pattern)" + (r.direction.map { " · \($0.capitalized)" } ?? ""),
-                                      notes: [r.description, r.cheatsheetPattern.map { "Cheatsheet: \($0)" }, r.entryRule.map { "Entry: \($0)" }, r.stopRule.map { "Stop: \($0)" }].compactMap { $0 })
+                                      notes: [r.description, r.cheatsheetPattern.map { "Cheatsheet: \($0)" }, r.entryRule.map { "Entry: \($0)" }, r.stopRule.map { "Stop: \($0)" }].compactMap { $0 },
+                                      points: r.points, pointsLabel: r.points.isEmpty ? nil : r.pattern)
         } label: {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -396,9 +410,11 @@ struct SignalsView: View {
 
     private func earningsRow(_ row: EarningsRow) -> some View {
         Button {
+            let hp = harmonicPoints(for: row.symbol)
             chartTarget = ChartTarget(symbol: row.symbol,
                                       subtitle: "Earnings " + earningsWhen(row) + (row.section.map { " · \($0.capitalized)" } ?? ""),
-                                      notes: [row.take, row.catalystAngle.map { "Catalyst: \($0)" }, row.optionsPlay.map { "Options play: \($0)" }].compactMap { $0 })
+                                      notes: [row.take, row.catalystAngle.map { "Catalyst: \($0)" }, row.optionsPlay.map { "Options play: \($0)" }].compactMap { $0 },
+                                      points: hp?.points ?? [:], pointsLabel: hp?.label)
         } label: {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
