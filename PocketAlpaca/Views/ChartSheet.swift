@@ -97,7 +97,7 @@ struct ChartSheet: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 if let s = subtitle { Text(s).font(.subheadline).foregroundStyle(.secondary) }
-                Text(mode == .planner ? "Alpaca bars · tap A, B, C to project D" : "Ichimoku cloud overlay · \(interval.label)").font(.caption2).foregroundStyle(.tertiary)
+                Text(mode == .planner ? "Alpaca bars · latest pattern from the pivots, or tap your own" : "Ichimoku cloud overlay · \(interval.label)").font(.caption2).foregroundStyle(.tertiary)
             }
             Spacer()
             if let p = heldPosition {
